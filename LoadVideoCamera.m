@@ -1,4 +1,4 @@
-function [ output_args ] = LoadVideoCamera( fileName )
+function KRT = LoadVideoCamera( fileName )
 %LOADVIDEOCAMERA Summary of this function goes here
 %   Detailed explanation goes here
     File = fopen(fileName,'r');
