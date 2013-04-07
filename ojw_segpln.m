@@ -38,6 +38,7 @@ end
 ephoto = @(F) log(2) - log(exp(sum((F-reshape(double(R), [], sz(3))) .^ 2, 2)*(-1/(options.col_thresh*sz(3))))+1);
 R = uint8(R);
 [X Y] = meshgrid(1:sz(2), 1:sz(1));
+<<<<<<< HEAD
 WC = ones(sz(1)*sz(2), 3);
 WC(:,1) = X(:);
 WC(:,2) = Y(:);
@@ -59,12 +60,71 @@ for a = 1:numel(images)
         % Look up the colours
         Y = squeeze(vgg_interp2(images{a}, (X(:,1) + d(1)) .* Z, (X(:,2) + d(2)) .* Z, 'linear', -1000));
 
+=======
+% WC = ones(sz(1)*sz(2), 3);
+% WC(:,1) = X(:);
+% WC(:,2) = Y(:);
+pts = ones(sz(1)*sz(2), 3);
+pts(:,1) = X(:);
+pts(:,2) = Y(:);
+
+X = sz - 2 * options.window;
+corr = zeros(X(1), X(2), numel(disps));
+filt = fspecial('average', [1 1+2*options.window]);
+
+%-----video disparity calculation ----%
+num_pixels = sz(1)*sz(2);
+epl_pts = zeros(num_pixels, 3);
+
+Kf = P.K(:,:,1);
+Rf = P.R(:,:,1);
+Tf = P.T(:,1);
+
+for a = 2:numel(images)
+    K2 = P.K(:,:,a);
+    R2 = P.R(:,:,a);
+    T2 = P.T(:,a);
+    tmp_mat = Kf * R2' * Rf;
+    tmp_vec = K2' * R2' * ( Tf - T2);
+    tmp_vec = repmat(tmp_vec, [1 num_pixels]);
+    for b = 1:numel(disps)
+        epl_pts(:, :) = ( tmp_mat * Kf\(pts(:,:)') + disps(b) * tmp_vec )';
+     
+        % Look up the colours
+        Y = squeeze(vgg_interp2(images{a}, epl_pts(:,1), epl_pts(:,2), 'linear', -1000));
+>>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
         % Calculate the RSSD
         Y = ephoto(Y);
         Y = conv2(filt, filt', reshape(Y, sz(1:2)), 'valid');
         corr(:,:,b) = corr(:,:,b) + Y;
     end
 end
+<<<<<<< HEAD
+=======
+clear epl_pts;
+clear pts;
+%
+
+% For each image...
+%     for a = 1:numel(images)
+%         % Project the points
+%         X = WC * P.P(:,1:3,a)';
+%         P_ = P.P(:,4,a);
+%         % For each disparity...
+%         for b = 1:numel(disps)
+%             % Vary image coordinates according to disparity
+%             d = disps(b) * P_;
+%             Z = 1 ./ (X(:,3) + d(3));
+%             % Look up the colours
+%             Y = squeeze(vgg_interp2(images{a}, (X(:,1) + d(1)) .* Z, (X(:,2) + d(2)) .* Z, 'linear', -1000));
+%             % Calculate the RSSD
+%             Y = ephoto(Y);
+%             Y = conv2(filt, filt', reshape(Y, sz(1:2)), 'valid');
+%             corr(:,:,b) = corr(:,:,b) + Y;
+%         end
+%     end
+
+>>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 % Normalize
 X = ephoto(-1000) * numel(images);
 corr = (X(1) - corr) / X(1);
@@ -102,6 +162,13 @@ WC = zeros(sz(2)*sz(1), 3);
 WC(:,3) = 1 ./ corr(:);
 WC(:,2) = WC(:,3) .* Y(:);
 WC(:,1) = WC(:,3) .* X(:);
+<<<<<<< HEAD
+=======
+WC(:,:) = ( Kf \ WC(:,:)' )';
+tmp_vec = repmat(Tf, [1 num_pixels]);
+WC(:,:) = (Rf * WC(:,:)' + tmp_vec)';
+clear tmp_vec
+>>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 clear X Y
 
 % Switch off annoying warnings
@@ -112,6 +179,10 @@ warning off MATLAB:nearlySingularMatrix
 warning off MATLAB:illConditionedMatrix
 warning off MATLAB:rankDeficientMatrix
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 % Generate piecewise-planar disparity maps
 D = zeros(sz(1)*sz(2), nMaps);
 rt = 0.1; %2 * min(abs(diff(Z(:))));
@@ -129,6 +200,7 @@ for b = 1:nMaps
             M_ = rplane(N, rt);
             N = N(M_,:);
         end
+<<<<<<< HEAD
 
         % Find least squares plane from inliers
         N = N \ repmat(-1, [size(N, 1) 1]);
@@ -138,6 +210,77 @@ for b = 1:nMaps
     end
     info.plane{b} = plane;
 end
+=======
+        %debug
+        % Find least squares plane from inliers
+        N = N \ repmat(-1, [size(N, 1) 1]);
+        plane(a,:) = N;
+        if(isnan(N(1)) || isnan(N(2)) || isnan(N(3)))
+            fprintf('plane calculation is wrong\n');
+            N = 0;
+            plane(a,:) = 0;
+        end
+        
+        [Y X] = ind2sub(sz, find(M));
+        
+        %modify disparity calculation using R, T
+        N = [ (N' * Rf(:, 1))  (N' * Rf(:, 2))  (N' * Rf(:, 3)) ] / ( N' * Tf + 1) ; 
+        D(M,b) = -(X * N(1) + Y * N(2) + N(3));
+      
+    end
+    info.plane{b} = plane;
+end
+%---------------%
+%Unify labels of 3D planes for all proposals
+%Model 3D parameter space as a BSP
+%plane label starts from 1, not 0
+min_val = zeros(1, 3);
+max_val = zeros(1, 3);
+min_val(:) = min(info.plane{1}( :, :) );
+max_val(:) = max(info.plane{1}( :, :) );
+for b = 2:nMaps
+    for c = 1:3
+        min_val(c) = min( min(info.plane{b}( :, c) ) , min_val(c) );
+        max_val(c) = max( max(info.plane{b}( :, c) ) , max_val(c) );
+    end
+end
+
+
+% num_hierarchy = 5;
+% num_planes = 0;
+% flag = zeros(1, 8^num_hierarchy);
+% for b = 1:nMaps
+%     plane = info.plane{b};
+%     for i = 1: max(max(info.segments(:,:,b)))
+%         tmp_min = min_val;
+%         tmp_max = max_val;
+%         cell_id = 0;
+%         for h = 1:num_hierarchy
+%             local_id = 0;
+%             mid_val = (tmp_min + tmp_max) / 2; 
+%             for c = 1:3
+%                 if( plane(i, c) > mid_val(c))
+%                     local_id = local_id + 2^(c-1);
+%                     tmp_min(c) = mid_val(c);
+%                 else
+%                     tmp_max(c) = mid_val(c);
+%                 end
+%             end
+%             cell_id = cell_id + 8^(h-1) * local_id;
+%         end
+%         cell_id = cell_id+1;
+%         if(flag(cell_id) == 0)
+%             num_planes = num_planes + 1;
+%             flag(cell_id) = num_planes;
+%         end
+%         info.label_table{b}(i) = flag(cell_id);
+%     end
+% end
+
+
+
+%---------------%
+>>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 
 % Reset warnings
 warning(warning_state);

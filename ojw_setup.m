@@ -34,28 +34,34 @@ function [images P disps nclosest] = ojw_setup(options, Pout)
 
 % Load the input variables we need
 load data.mat
-
-% Get the output matrix we want
+% after loading data.mat, P.mat is generated
+%Get the output matrix we want
 if isempty(Pout)
     Pout = Pi;
 end
-if size(Pout, 3) > 1
-    Pout = Pout(:,:,options.imout);
+if size(Pout.P, 3) > 1
+    Pout.K = Pout.K(:,:,options.imout);
+    Pout.R = Pout.R(:,:,options.imout);
+    Pout.T = Pout.T(:,:,options.imout);
+    Pout.P = Pout.P(:,:,options.imout);
 end
 
-if isfield(options, 'dim_out') && ~isempty(options.dim_out)
-    % Configure the output P matrix according to the new top-left pixel
-    % position
-    Pout = [1, 0, -options.dim_out(1); 0, 1, -options.dim_out(2); 0 0 1] * Pout;
-end
+% if isfield(options, 'dim_out') && ~isempty(options.dim_out)
+%     % Configure the output P matrix according to the new top-left pixel
+%     % position
+%     Pout = [1, 0, -options.dim_out(1); 0, 1, -options.dim_out(2); 0 0 1] * Pout;
+% end
 
 % Make input matrices relative to output
-[P nclosest] = P_r2j(Pout, Pi, options.nclosest);
+
+[P nclosest] = P_r2j(Pout, Pi, options);
+
 
 if exist('points', 'var')
+    fprintf('enter points variable\n');
     % Determine range of depth in scene from SfM feature points in space
     points(4,:) = 1; % Homogenize
-    points = Pout(3,:) * points;
+    points = Pout.P(3,:) * points;
     points = [min(points) max(points)];
     % Extend range by 20% front and back
     points = points .* [0.8 1.2];
@@ -68,7 +74,7 @@ if exist('points', 'var')
     WC(4,:) = 1;
     disp_vals = 0;
     for a = 1:size(P, 3)
-        X = P(:,:,a) * WC;
+        X = P.P(:,:,a) * WC;
         X = ojw_bsxfun(@times, X(1:2,:), 1./X(3,:));
         X = max(abs(X(:,1) - X(:,2)));
         disp_vals = max(disp_vals, X);
@@ -86,8 +92,19 @@ disps = sort(disps, 'descend');
 
 % Load the input images
 images = cell(size(nclosest));
-for a = 1:numel(nclosest)
-    images{a} = imread(sprintf('input.%3.3d.png', nclosest(a)-1));
+png_file = sprintf('input.%3.3d.png', 0);
+fp = fopen(png_file);
+if( fp > 1)
+    appendix = 'png';
+    fclose(fp);
+else
+    appendix = 'jpg';
 end
+
+
+for a = 1:numel(nclosest)
+    images{a} = imread(sprintf('input.%3.3d.%s', nclosest(a)-1, appendix));
+end
+
 return
 
