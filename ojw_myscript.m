@@ -4,7 +4,6 @@ options = ojw_default_options(algs{1});
 
 % In the case of stereo, download the desired sequence
 % sequence = 'cones';
-% options.input_type = 'stereo';
 % download_stereo(sequence);
 sequence = 'NewRoad';
 download_img_sequence(sequence);
@@ -16,7 +15,7 @@ options.dim_out = [0 0 450 375]; % Output image dimensions: [start_x-1 start_y-1
 % tsukuba 384 288
 % venus 434 383
 options.imout = 1; % Index of projection matrix to use for output
-% only account for two images?
+% NewRoad test
 options.nclosest = [1 2];
 % options.nclosest = [1 7]; % Input images to use, in terms of distance of camera centres from output view
 % cones [3 7]
