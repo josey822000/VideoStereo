@@ -508,7 +508,8 @@ I = reshape(I, [y x 3]); % Reshape to correct size
 %% Only display if the output isn't used
 if nargout == 0
     % Get handles to the figure and axes
-    hFig = gcf; hAx = gca;
+    hFig = gcf; 
+    hAx = gca;
     % Clear what's there
     cla(hAx, 'reset');
     % Display the image - using image() is fast

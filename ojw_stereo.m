@@ -296,16 +296,23 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         vals.I = images;
 %         InitialByKey(vals,options);
         step = 15;
-        Key = LoadKeyFrame();
-        KeyP.K = P.K(:,:,options.KeyFrame);
-        KeyP.R = P.R(:,:,options.KeyFrame);
-        KeyP.T = P.T(:,options.KeyFrame);
-        ref = floor(size(KeyP.K,3)/2);
-        Key = UnifyUsingMeanDiff(Key,KeyP,ref,disps(1)/300);
+        
+        if ~exist('UnifiedKey.mat')
+            Key = LoadKeyFrame();
+            KeyP.K = P.K(:,:,options.KeyFrame);
+            KeyP.R = P.R(:,:,options.KeyFrame);
+            KeyP.T = P.T(:,options.KeyFrame);
+            ref = floor(size(KeyP.K,3)/2);
+            Key = UnifyUsingMeanDiff(Key,KeyP,ref,disps(1)/300);
+            save('UnifiedKey.mat','Key');
+        else
+            tmp = load('UnifiedKey.mat');
+            Key = tmp.Key;
+        end
         % Use the proposal methods:
         % SegPln (prototypical segment-based stereo proposals)
         for f=27:size(P.K,3)
-            if isempty(find(options.KeyFrame == f, 1))
+            if ~isempty(find(options.KeyFrame == f, 1))
                 continue;
             end
             fpath = num2str(f);
@@ -317,6 +324,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
             if key1 == key2 || key2 ==0
                 key2 = key1+step;
             end
+            fprintf('now frame:%d key:%d,%d\n',f,key1,key2);
             useKey = [key1 key2];
             tmpvals = vals;
             tmpvals.I = images(useKey);
@@ -325,7 +333,6 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
             tmpvals.P.R = P.R(:,:,[f useKey]);
             tmpvals.P.T = P.T(:,[f useKey]);
             tmpvals.useKey = useKey;
-            tmpKey = Key(useKey/step);
             tmpimages = images([f useKey]);
             tmpoptions = options;
             tmpoptions.imout = f;
@@ -375,10 +382,12 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
 
                         % set data term
                         data = zeros(segNum,segNum, 'int32');
-
+                        ColorList = zeros(segNum,3);
+                        img = reshape(images{f},[],3);
                         for sid = 1:segNum %row
                             N = plane{i}(sid,:)';
-
+                            M = segment(:) == sid;
+                            ColorList(sid,:) = sum(img(M))./nnz(M);
                             planeD = -(X * N(1) + Y * N(2) + N(3));
                             planeD(planeD < vals.d_min) = -2*vals.d_step;
                             planeD(planeD > vals.d_min+vals.d_step) = 2*vals.d_step;
@@ -398,21 +407,27 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
                         List = (Neigh(1,:)-1)*int32(segNum)+Neigh(2,:);
                         List = [List (Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)];
 
-
+                        % color
+                        ColorList = repmat(ColorList,[segNum 1]) - reshape(repmat(ColorList',[segNum 1]),3,[])';
+                        ColorList = sum(ColorList.^2,2) ;
+                        
                         % boundary length
                         pixNumInSeg = histc(segment(:),1:segNum);
                         pixNumInSeg = repmat(pixNumInSeg,[1 segNum]) + repmat(pixNumInSeg',[segNum 1]);
-                        Smooth = zeros(1,segNum*segNum, 'int32');
+
                         Smooth = histc(List,1:segNum*segNum);
                         pixNumInSeg = pixNumInSeg(:) .* (Smooth(:)>0);
-                        pixNumInSeg = 9000/pixNumInSeg(:);
+                        ColorList = ColorList(:) .* (Smooth(:)>0);
+                        ColorList = sqrt(ColorList) + 1;
+%                         pixNumInSeg = 9000/pixNumInSeg(:);
                         Smooth = Smooth*0.5;
-                        Smooth = ceil(Smooth.*pixNumInSeg);
+%                         Smooth = ceil(Smooth.*pixNumInSeg);
+                        Smooth = ceil(30*Smooth(:)./ColorList);
                         Smooth = reshape(Smooth,[segNum segNum]);
                         Smooth(isnan(Smooth))=0;
 
 
-                        clear tmp Neigh List ColorD SmoothNormalize
+                        clear tmp Neigh List ColorD SmoothNormalize ColorList pixNumInSeg
                         GCO_SetDataCost(h,data);
                         GCO_SetNeighbors(h,Smooth);
                         GCO_Expansion(h);
@@ -485,7 +500,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
             save('Final_D','D');
             save('Final_Model','ObjModel');
             figure(13);imshow(D);
-            clear Dproposals    
+            clear Dproposals
             cd ..
         end
     case 'FilterOut'

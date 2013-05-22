@@ -81,10 +81,9 @@ function Key = UnifyUsingMeanDiff( Key,P , ref, threshold)
             [val idx] = min(meanVal);
             if val< threshold
                 FTable(Fid(i)) = refID(idx);
-                fprintf('%d -> %d \n',Fid(i),refID(idx));
+%                 fprintf('%d -> %d \n',Fid(i),refID(idx));
             end
         end
-        figure(2); imshow(DF/0.0053);
         % from object plane
         Oid = unique(WarpInfo{k}.segMap);
         Oid = Oid(Oid>1);
@@ -100,173 +99,17 @@ function Key = UnifyUsingMeanDiff( Key,P , ref, threshold)
             for j=1:numel(refID)
                 if mean(DiffOfKandRef(M & (Key{ref}.Model.segMap == refID(j)))) < threshold
                     ObjTable(Oid(i)) = refID(j);
-                    fprintf('%d -> %d \n',Oid(i),refID(j));
+%                     fprintf('%d -> %d \n',Oid(i),refID(j));
                 end
             end
         end
-        figure(3); imshow(DObj/0.0053);
         % rebuild F and segMap
         Key{k}.Model.F = FTable(Key{k}.Model.F);
         Key{k}.Model.segMap = ObjTable(Key{k}.Model.segMap);
-        figure(3*k+2); imshow(DiffOfKandRef/threshold);
-        figure(3*k+3); sc([Key{k}.Model.F Key{ref}.Model.F],'rand');
-        figure(3*k+4); sc([Key{k}.Model.segMap Key{ref}.Model.segMap],'rand');
-        pause;
+        Key{k}.Model.table(ObjTable(Key{k}.Model.table>0)) = Key{k}.Model.table(Key{k}.Model.table>0);
+        
     end
-    %% filter Obj less than Threshold
-    sameTable = false(ONum,ONum);
-    channelTable = false(ONum,ONum);
-    aThr = 1.e6;
-    bThr = 1.e6;
-    cThr = 1.e4;
-    plane(:,1) = floor(plane(:,1)*aThr)/aThr;
-    plane(:,2) = floor(plane(:,2)*bThr)/bThr;
-    plane(:,3) = floor(plane(:,3)*cThr)/cThr;
-    
-    %% looking for the same object plane
-    [T M] = sortrows(plane(:,1));
-    % find a within aThr
-    T = abs(diff(T));
-    T = find(T == 0);
-    % if the index is continue than this plane is inside a Thr
-    diffT = diff(T);
-    diffT = find(diffT > 1);
-    diffT(end+1) = numel(T);
-    start = 0;
-    for s = 1:numel(diffT)
-        a = M([T(start+1:diffT(s)); T(diffT(s))+1] );
-        c = reshape( repmat(a', numel(a), 1), numel(a) * numel(a), 1 );
-        d = repmat(a(:), length(a), 1);
-        sameTable((c-1)*double(ONum) + d) = 1;
-        start = diffT(s);
-    end
-    fprintf('samePlane at channel 1:%d\n',numel(T));
-    [T M] = sortrows(plane(:,2));
-    T = abs(diff(T));
-    T = find(T == 0);
-    diffT = diff(T);
-    diffT = find(diffT > 1);
-    diffT(end+1) = numel(T);
-    start = 0;
-    for s = 1:numel(diffT)
-        a = M([T(start+1:diffT(s)); T(diffT(s))+1] );
-        c = reshape( repmat(a', numel(a), 1), numel(a) * numel(a), 1 );
-        d = repmat(a(:), length(a), 1);
-        channelTable((c-1)*double(ONum) + d) = 1;
-        start = diffT(s);
-    end
-    fprintf('samePlane at channel 2:%d\n',numel(T));
-    sameTable = sameTable & channelTable;
-    channelTable = false(ONum,ONum);
-    [T M] = sortrows(plane(:,3));
-    T = abs(diff(T));
-    T = find(T == 0);
-    diffT = diff(T);
-    diffT = find(diffT > 1);
-    diffT(end+1) = numel(T);
-    start = 0;
-    for s = 1:numel(diffT)
-        a = M([T(start+1:diffT(s)); T(diffT(s))+1] );
-        c = reshape( repmat(a', numel(a), 1), numel(a) * numel(a), 1 );
-        d = repmat(a(:), length(a), 1);
-        channelTable((c-1)*double(ONum) + d) = 1;
-        start = diffT(s);
-    end
-    fprintf('samePlane at channel 3:%d\n',numel(T));
-    sameTable = sameTable & channelTable;
-    sameTable = sameTable | sameTable';
-    
-    ObjectTable = 1:ONum;
-    [X Y] = find(sameTable);
-    unqY = unique(Y);
-    for o = 1: numel(unqY)
-        ObjectTable(X(Y == unqY(o))) = min(X(Y == unqY(o)));
-    end
-    fprintf('Total plane:%d\n',numel(unique(ObjectTable)));
-    for k=1:size(P.K,3)
-        Key{k}.Model.table(ObjectTable(Key{k}.Model.table>0)) = Key{k}.Model.table(Key{k}.Model.table > 0);
-        Key{k}.Model.segMap = ObjectTable(Key{k}.Model.segMap);
-        Key{k}.Model.GMM_Name = GMM_Name(ObjectTable(unique(Key{k}.Model.segMap)));
-        Key{k}.Model.parallax = parallax(ObjectTable(unique(Key{k}.Model.segMap)),:);
-%         Key{k}.Model.plane = plane( ObjectTable(unique(Key{k}.Model.segMap)),:);
-    end
-    %% filter Depth less than Threshold
-    sameTable = false(FNum,FNum);
-    
-    
-    depthpln(:,1) = floor(depthpln(:,1)*aThr)/aThr;
-    depthpln(:,2) = floor(depthpln(:,2)*bThr)/bThr;
-    depthpln(:,3) = floor(depthpln(:,3)*cThr)/cThr;
-    
-    %% looking for the same F plane
-    [T M] = sortrows(depthpln(:,1));
-    % find a within aThr
-    T = abs(diff(T));
-    T = find(T == 0);
-    % if the index is continue than this plane is inside a Thr
-    diffT = diff(T);
-    diffT = find(diffT > 1);
-    diffT(end+1) = numel(T);
-    start = 0;
-    for s = 1:numel(diffT)
-        a = M([T(start+1:diffT(s)); T(diffT(s))+1] );
-        c = reshape( repmat(a', numel(a), 1), numel(a) * numel(a), 1 );
-        d = repmat(a(:), length(a), 1);
-        sameTable((c-1)*double(FNum) + d) = 1;
-        start = diffT(s);
-    end
-    fprintf('samePlane:%d\n',numel(T));
-    channelTable = false(FNum,FNum);
-    [T M] = sortrows(depthpln(:,2));
-    T = abs(diff(T));
-    T = find(T == 0);
-    diffT = diff(T);
-    diffT = find(diffT > 1);
-    diffT(end+1) = numel(T);
-    start = 0;
-    for s = 1:numel(diffT)
-        a = M([T(start+1:diffT(s)); T(diffT(s))+1] );
-        c = reshape( repmat(a', numel(a), 1), numel(a) * numel(a), 1 );
-        d = repmat(a(:), length(a), 1);
-        channelTable((c-1)*double(FNum) + d) = 1;
-        start = diffT(s);
-    end
-    fprintf('samePlane:%d\n',numel(T));
-    sameTable = sameTable & channelTable;
-    channelTable = false(FNum,FNum);
-    [T M] = sortrows(depthpln(:,3));
-    T = abs(diff(T));
-    T = find(T == 0);
-    diffT = diff(T);
-    diffT = find(diffT > 1);
-    diffT(end+1) = numel(T);
-    start = 0;
-    for s = 1:numel(diffT)
-        a = M([T(start+1:diffT(s)); T(diffT(s))+1] );
-        c = reshape( repmat(a', numel(a), 1), numel(a) * numel(a), 1 );
-        d = repmat(a(:), length(a), 1);
-        channelTable((c-1)*double(FNum) + d) = 1;
-        start = diffT(s);
-    end
-    fprintf('samePlane:%d\n',numel(T));
-    sameTable = sameTable & channelTable;
-    sameTable = sameTable | sameTable';
-    
-    FTable = 1:FNum;
-    [X Y] = find(sameTable);
-    unqY = unique(Y);
-    for f = 1: numel(unqY)
-        FTable(X(Y == unqY(f))) = min(X(Y == unqY(f)));
-    end
-    fprintf('samePlane:%d\n',numel(unique(FTable)));
 
-    for k=1:size(P.K,3)
-        Key{k}.Model.F = FTable(Key{k}.Model.F);
-    end
-    for k=1:size(P.K,3)
-        tmp = Key{k};
-        save(['UnifiedModel[' num2str(k) ']'],'tmp');
-    end
 end
 
 function [D ObjModel] = RefitObj(D,ObjModel,R,imout,d_step,SEI,P)
