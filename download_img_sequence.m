@@ -16,7 +16,7 @@ function  download_img_sequence( sequence )
 
 % Check if the dataset exists
 subdir = ['./' sequence '/'];
-if isdir(subdir)
+if exist('data.mat')
     return
 end
  
@@ -72,7 +72,7 @@ switch sequence
         max_disp = 0.017427;
     case {'Angkor'}
         data_class = 'video';
-        max_disp = 0.008743;
+        max_disp = 0.0053;
     case {'Flower', 'Walk'}
         % In these two cases, the max_disparity is unknown
         data_class = 'video';
@@ -144,11 +144,11 @@ switch(data_class)
     case {'stereo'}
         disps = disp_range(1)*disparity_factor:disp_range(2)*disparity_factor;
     case {'video'}
-        step = max_disp/20;
+        step = max_disp/300;
         disps = 0:step:max_disp;
 end
 
-load NewRoad_camera_KRT
+load([sequence '_camera_KRT']);
 if( strcmp(data_class,'stereo'))
     Pi.K = eyes(3, 3, inn);
     Pi.R = eyes(3, 3, inn);
@@ -176,6 +176,7 @@ end
 % Save
 %save([subdir 'data.mat'], '-v6', 'Pi', 'disps');
 %Save data to data.mat but not including Pi
+delete([subdir 'data.mat']);
 save([subdir 'data.mat'], '-v6', 'Pi','disps');
 
 

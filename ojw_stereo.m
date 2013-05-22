@@ -1,53 +1,4 @@
 function [D info] = ojw_stereo(images, P, disps, sz, options)
-%OJW_STEREO  Global stereo with 2nd-order smoothness prior & occlusion model
-%
-%   [D info] = ojw_stereo(images, P, disps, sz, options)
-%
-% Generates a disparity (1/depth) map for the first input image. This
-% algorithm implements a "global" stereo algorithm, with asymmetrical
-% occlusion modelling, using an alpha-expansion graph cuts style approach,
-% but with arbitrary disparity proposals.
-%
-%IN:
-%   images - 1xN cell array of input images, the reference image being
-%            images{1}.
-%   P - 3x4xN array of projection matrices for the input images, relative
-%       to the output image.
-%   disps - 1xM list of disparities to sample at.
-%   sz - 1x2 vector of output image dimensions: [H W].
-%   options - a structure containing the following input parameters:
-%       col_thresh - scalar noise parameter for data likelihood.
-%       occl_const - scalar occlusion cost.
-%       disp_thresh - scalar disparity threshold for smoothness prior.
-%       smoothness_kernel - index denoting which smoothness kernel to use.
-%                           1: truncated linear; 2: truncated quadratic.
-%       lambda_l - scalar smoothness prior weight for cliques crossing
-%                  segmentation boundaries.
-%       lambda_h - scalar smoothness prior weight for cliques not crossing
-%                  segmentation boundaries.
-%       seg_params - 1x3 vector of parameters for the mean-shift
-%                    over-segmentation of the reference image.
-%       visibility - boolean indicating whether to employ the geometrical
-%                    visbility contstraint.
-%       connect - scalar neighbourhood system of the graph, 4 or 8
-%                 connected.
-%       max_iters - scalar number of iterations to halt after, if
-%                   convergence is not achieved first.
-%       converge - scalar percentage decrease in energy per iteration at
-%                  which optimization stops.
-%       average_over - scalar number of iterations to average over when
-%                      checking convergence.
-%       contract - scalar number of QPBOP iterations to do.
-%       improve - scalar indicating which method to use to label unlabelled
-%                 nodes. 0: QPBO-F, 1: QPBOI-F, 2: QPBO-R, 3: QPBO-L,
-%                 4: QPBOI-R.
-%       independent - boolean indicating whether to use independent, or
-%                     merely strongly-connected, regions for improve
-%                     methods 2 & 4.
-%
-%OUT:
-%   D - HxW disparity map.
-%   info - structure containing other outputs from the algorithm.
 
 % $Id: ojw_stereo.m,v 1.5 2008/11/17 11:27:35 ojw Exp $
 
@@ -60,7 +11,8 @@ function [D info] = ojw_stereo(images, P, disps, sz, options)
 %R = images{1}(round(P.P(8))+(1:sz(1)),round(P.P(7))+(1:sz(2)),:);
 R = images{1};
 vals.I = images(2:end);
-vals.P = permute(P.P(:,:,2:end), [2 1 3]);
+vals.P = P;
+vals.disps = disps;
 vals.sz = sz;
 colors = size(R, 3);
 num_in = numel(images);
@@ -146,149 +98,408 @@ if nargout > 1
 end
 sigmaColor = 10;
 if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
-    % Use the proposal methods:
-    % SegPln (prototypical segment-based stereo proposals)
-    [Dproposals info.segpln_gen] = ojw_segpln(images, P, disps, R, options);
- 	tmp = info.segpln_gen;
-    save('Dproposals','Dproposals');
- 	save('segpln_gen','tmp');
- 	clear tmp
-    
-    % load segpln_gen & Dproposals
-%     tmp = load('segpln_gen');
-%     info.segpln_gen = tmp.tmp;
-%     Dproposals = load('Dproposals');
-%     Dproposals = Dproposals.Dproposals;
-%     clear tmp
-  
-    % Truncate extreme values in Dproposal
-    Dproposals(Dproposals < vals.d_min) = vals.d_min;
-    Dproposals(Dproposals > vals.d_min+vals.d_step) = vals.d_min+vals.d_step;
-  
-    % object depth segmentation
-	info.segpln_Obj = cell(size(info.segpln_gen.segments,3),1);
-    [X Y] = meshgrid(1:sz(2),1:sz(1));
-    plane = info.segpln_gen.plane;
-                
-    % load segpln_Obj
-%   tmp = load('segplnRight6_Obj');
-%   info.segpln_Obj = tmp.tmp;
-%   clear tmp
-%
-    for i = 1:size(Dproposals,3)
-        %update segMap(object map) and plane to global numbers
-        %label_table = info.segpln_gen.label_table{i};
-        % try gco
-        segment = info.segpln_gen.segments(:,:,i);
-        info.segpln_Obj{i}.F = segment;
-        %info.segpln_Obj{i}.F = label_table(segment);
-        
-        segNum = max(max(segment));
-        h = GCO_Create(segNum,segNum);
-        
-        % set data term
-        data = zeros(segNum,segNum, 'int32');
-        
-        for sid = 1:segNum %row
-            planeD = -(X * plane{i}(sid,1) + Y * plane{i}(sid,2) + plane{i}(sid,3));
-            planeD(planeD < vals.d_min) = vals.d_min;
-            planeD(planeD > vals.d_min+vals.d_step) = vals.d_min+vals.d_step;
-            % planeDiff: 1*pix
-            planeDiff = reshape(abs(planeD-Dproposals(:,:,i))/vals.d_step,[],1);
-            data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)';
-            %data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)';
-	    end
-		%data = data/max(max(data));
-        clear planeD planeDiff mapp
-		tmp = int32(segment(vals.SEI));
-        % depth diff on boundary
-		ColorD = double(images{1})/255.;
-        ColorD = reshape(ColorD,[],3);
-        DiffObjIdx = repmat(any(diff(int32(segment(vals.SEI))),1), [2 1]);
-        Neigh = reshape(tmp(DiffObjIdx),2,[]);
-%       % depth difference on smooth term
-%       tmpD = Dproposals(:,:,i);
-%       tmpD = tmpD(vals.SEI);
-%       tmpD = abs(diff(reshape(tmpD(DiffObjIdx),2,[])));
-%       tmpD = repmat(tmpD,[1 2]);
-%       % color difference on smooth term
-%       Idx = reshape(vals.SEI(DiffObjIdx),2,[]);
-%       ColorD = 5/exp(sqrt(sum((ColorD(Idx(1,:),:) - ColorD(Idx(2,:),:)).^2,2)))+1;
-%       ColorD = repmat(ColorD,[1 2]);
-        clear DiffObjIdx Idx
-        pixObj = histc(reshape(segment,1,[]),1:segNum)';
-        List = (Neigh(1,:)-1)*int32(segNum)+Neigh(2,:);
-        List = [List (Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)];
-        % boundary length
-        Smooth = zeros(1,segNum*segNum, 'int32');
-        Smooth(List) = [pixObj(Neigh(1,:))+pixObj(Neigh(2,:)) pixObj(Neigh(1,:))+pixObj(Neigh(2,:))];
-%       SmoothNormalize = [pixOnBoundary' ones(segNum,1)]*[ones(1,segNum) ; pixOnBoundary];
-%       SmoothNormalize = SmoothNormalize.^2;
-%       SmoothNormalize(logical(eye(size(SmoothNormalize)))) = 1;
-%       tmpD = accumarray(List',tmpD');
-%       tmpD = [tmpD ; zeros(segNum*segNum-size(tmpD,1),1)];
-%       ColorD = accumarray(List',ColorD');
-%       ColorD = [ColorD ; zeros(segNum*segNum-size(ColorD,1),1)];
-%       ColorD = ColorD';
-        Smooth = histc(List,1:segNum*segNum);
-        Smooth = Smooth*0.5;
-	%   Smooth = (ColorD .* tmpD)./(Smooth.^2)' ; COLOR& DetphDIFF
-	%   Smooth = ColorD./(Smooth)' ;
-        Smooth = reshape(Smooth,[segNum segNum]);
-        Smooth(isnan(Smooth))=0;
-        %Smooth = Smooth * 0.5 * ;
-        %Smooth = reshape(Smooth,[segNum segNum])./SmoothNormalize;
-        %Smooth = Smooth.*ColorD;
-        %Smooth = max(max(Smooth))-Smooth;
-        %Smooth(logical(eye(size(Smooth)))) = 0; % avoid NaN
-		%Smooth = histc(List,1:segNum*segNum);
-	    %Smooth = reshape(Smooth,[segNum segNum])./SmoothNormalize;
-        clear tmp Neigh List ColorD SmoothNormalize
-        GCO_SetDataCost(h,data);
-        GCO_SetNeighbors(h,Smooth);
-        GCO_Expansion(h);
-        Label = GCO_GetLabeling(h);
-        % after relabel
-		uq = unique(Label);
-        NewSegNum = numel(uq);
-        segment = Label(segment);
-        %---- store segment plane for each object (object plane) for later use 
-        % info.obj_pln{i} = plane{i}(segment, :);
-        %----------------------------------------------%
-       
-        tmpL = 1:segNum;
-        tmpL(uq) = 1:NewSegNum;
-        segment = tmpL(segment);
-        info.segpln_Obj{i}.segMap = segment;
-        info.segpln_Obj{i}.plane = plane{i}(uq,:);
-        sc(segment,'rand');
-    
-       
-        fprintf('solving GCO for proposal %d\n', i);
-        save(['OnPaperMap[' num2str(i) ']'],'segment');
-       
-        
-        clear segment tmpL
-        clear data smooth
-        GCO_Delete(h);
-        
-        %warp to other view
-        info.segpln_Obj{i}.otherView = ObjWarp(Dproposals(:,:,i),info.segpln_Obj{i}.F,info.segpln_Obj{i}.segMap,P(:,:,2:end));           
-        %calc Model            
-        [info.segpln_Obj{i}.plane info.segpln_Obj{i}.parallax info.segpln_Obj{i}.GMM_Name] = calcObjModel(vals.d_step,Dproposals(:,:,i),info.segpln_Obj{i},images{1},i,0);
-        
+    switch options.act
+    case 'InitialKey'
+        mkdir(num2str(options.imout));
+        cd(num2str(options.imout));
+        mkdir GMM
+        % Use the proposal methods:
+        % SegPln (prototypical segment-based stereo proposals)
+        if ~exist('Dproposals.mat');
+            [Dproposals info.segpln_gen] = ojw_segpln(images, P, disps, R, options);
+            tmp = info.segpln_gen;
+            delete('Dproposals.mat','segpln_gen.mat');
+            save('Dproposals','Dproposals');
+            save('segpln_gen','tmp');
+            clear tmp
+        else
+        % load segpln_gen & Dproposals
+            tmp = load('segpln_gen');
+            info.segpln_gen = tmp.tmp;
+            Dproposals = load('Dproposals');
+            Dproposals = Dproposals.Dproposals;
+            clear tmp
+        end
+        % Truncate extreme values in Dproposal
+        % if Truncate the cost may not right
+    %     Dproposals(Dproposals < vals.d_min) = vals.d_min;
+    %     Dproposals(Dproposals > vals.d_min+vals.d_step) = vals.d_min+vals.d_step;
+
+        % object depth segmentation
+        info.segpln_Obj = cell(size(info.segpln_gen.segments,3),1);
+        [X Y] = meshgrid(1:sz(2),1:sz(1));
+        plane = info.segpln_gen.plane;
+
+        % load segpln_Obj
+    %   tmp = load('segplnRight6_Obj');
+    %   info.segpln_Obj = tmp.tmp;
+    %   clear tmp
+    %
+        FsegNum = 0;
+        OsegNum = 0;
+
+
+        if ~exist('segpln_Obj.mat')
+            Kf = P.K(:,:,1);
+            Rf = P.R(:,:,1);
+            Tf = P.T(:,1);
+            for i = 1:size(Dproposals,3)
+                %update segMap(object map) and plane to global numbers
+                if ~exist(['Obj[' num2str(i) '].mat'])
+                    % try gco
+
+                    segment = info.segpln_gen.segments(:,:,i);
+                    figure(2); sc(segment,'rand');
+                    info.segpln_Obj{i}.F = segment;
+                    info.segpln_Obj{i}.depthPlane = info.segpln_gen.plane{i};
+                    %info.segpln_Obj{i}.F = label_table(segment);
+
+                    segNum = max(max(segment));
+                    h = GCO_Create(segNum,segNum);
+
+                    % set data term
+                    data = zeros(segNum,segNum, 'int32');
+
+                    for sid = 1:segNum %row
+                        N = plane{i}(sid,:)';
+                        planeD = -(X * N(1) + Y * N(2) + N(3));
+                        planeD(planeD < vals.d_min) = -2*vals.d_step;
+                        planeD(planeD > vals.d_min+vals.d_step) = 2*vals.d_step;
+                        planeDiff = abs(planeD(:)-reshape(Dproposals(:,:,i),[],1))/vals.d_step;
+                        data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)';
+                    end
+                    clear planeD planeDiff mapp
+                    tmp = int32(segment(vals.SEI));
+                    % depth diff on boundary
+                    DiffObjIdx = repmat(any(diff(int32(segment(vals.SEI))),1), [2 1]);
+                    Neigh = reshape(tmp(DiffObjIdx),2,[]);
+            %       % depth difference on smooth term
+            %       tmpD = Dproposals(:,:,i);
+            %       tmpD = tmpD(vals.SEI);
+            %       tmpD = abs(diff(reshape(tmpD(DiffObjIdx),2,[])));
+            %       tmpD = repmat(tmpD,[1 2]);
+            %       % color difference on smooth term
+        %             meanColor4eachSeg = accumarray(reshape(segment,[],1),ColorD(:,1));
+        %             meanColor4eachSeg(:,2) = accumarray(reshape(segment,[],1),ColorD(:,2));
+        %             meanColor4eachSeg(:,3) = accumarray(reshape(segment,[],1),ColorD(:,3));
+        %             ColorD = meanColor4eachSeg ./ repmat(histc(segment(:),1:max(segment(:))),[1 3]);
+                    clear DiffObjIdx meanColor4eachSeg
+                    List = (Neigh(1,:)-1)*int32(segNum)+Neigh(2,:);
+                    List = [List (Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)];
+
+        %             ColorMap = zeros(segNum,segNum,'int32');
+        %             ColorMap((Neigh(1,:)-1)*int32(segNum)+Neigh(2,:)) = sum((ColorD(Neigh(1,:),:) - ColorD(Neigh(2,:),:)).^2,2);
+        %             ColorMap((Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)) = sum((ColorD(Neigh(2,:),:) - ColorD(Neigh(1,:),:)).^2,2);
+        %             clear ColorD
+        %             ColorMap = ColorMap/(30*3);
+                    % boundary length
+                    pixNumInSeg = histc(segment(:),1:segNum);
+                    pixNumInSeg = repmat(pixNumInSeg,[1 segNum]) + repmat(pixNumInSeg',[segNum 1]);
+                    Smooth = zeros(1,segNum*segNum, 'int32');
+                    Smooth = histc(List,1:segNum*segNum);
+                    pixNumInSeg = pixNumInSeg(:) .* (Smooth(:)>0);
+                    pixNumInSeg = 9000/pixNumInSeg(:);
+                    Smooth = ceil(Smooth*0.025);
+%                     Smooth = ceil(Smooth.*pixNumInSeg);
+                    Smooth = reshape(Smooth,[segNum segNum]);
+                    Smooth(isnan(Smooth))=0;
+
+
+                    clear tmp Neigh List ColorD SmoothNormalize
+                    GCO_SetDataCost(h,data);
+                    GCO_SetNeighbors(h,Smooth);
+                    GCO_Expansion(h);
+                    Label = GCO_GetLabeling(h);
+                    % after relabel
+                    uq = unique(Label);
+                    NewSegNum = numel(uq);
+                    segment = Label(segment);
+                    %---- store segment plane for each object (object plane) for later use 
+                    % info.obj_pln{i} = plane{i}(segment, :);
+                    %----------------------------------------------%
+
+                    tmpL = 1:segNum;
+                    tmpL(uq) = 1:NewSegNum;
+                    segment = tmpL(segment);
+                    info.segpln_Obj{i}.segMap = segment;
+                    info.segpln_Obj{i}.plane = plane{i}(uq,:);
+                    figure(3);
+                    sc(segment,'rand');
+                    fprintf('solving GCO for proposal %d\n', i);
+
+                    clear segment tmpL
+                    clear data smooth
+                    GCO_Delete(h);
+
+                    info.segpln_Obj{i}.F = info.segpln_Obj{i}.F + FsegNum;
+                    info.segpln_Obj{i}.segMap = info.segpln_Obj{i}.segMap + OsegNum;
+                    FsegNum = max(max(info.segpln_Obj{i}.F));
+                    OsegNum = max(max(info.segpln_Obj{i}.segMap));
+
+                    %warp to other view
+                    info.segpln_Obj{i}.otherView = ObjWarp(Dproposals(:,:,i),info.segpln_Obj{i}.F,info.segpln_Obj{i}.segMap,P);           
+                    %calc Model            
+                    ExpFuse = 0;
+                    [info.segpln_Obj{i}.plane info.segpln_Obj{i}.parallax info.segpln_Obj{i}.GMM_Name] = calcObjModel(disps,Dproposals(:,:,i),info.segpln_Obj{i},images{1},i,ExpFuse);
+                    delete(['Obj[' num2str(i) ']']);
+                    tmp = info.segpln_Obj{i};
+                    save(['Obj[' num2str(i) ']'],'tmp');
+                else
+                    tmp = load(['Obj[' num2str(i) ']']);
+                    info.segpln_Obj{i} = tmp.tmp;
+                    clear tmp;
+%                     %warp to other view
+%                     info.segpln_Obj{i}.otherView = ObjWarp(Dproposals(:,:,i),info.segpln_Obj{i}.F,info.segpln_Obj{i}.segMap,P);           
+%                     %calc Model            
+%                     ExpFuse = 0;
+%                     [info.segpln_Obj{i}.plane info.segpln_Obj{i}.parallax info.segpln_Obj{i}.GMM_Name] = calcObjModel(disps,Dproposals(:,:,i),info.segpln_Obj{i},images{1},i,ExpFuse,P);
+%                     delete(['Obj[' num2str(i) '].mat']);
+%                     tmp = info.segpln_Obj{i};
+%                     save(['Obj[' num2str(i) ']'],'tmp');
+%                     clear tmp;
+                end
+
+            end
+            % update table
+            OsegNum = max(info.segpln_Obj{14}.segMap(:));
+            for i = 1:size(Dproposals,3)
+                table = zeros(OsegNum,1,'uint32');
+                table(unique(info.segpln_Obj{i}.segMap)) = 1:numel(unique(info.segpln_Obj{i}.segMap));
+                info.segpln_Obj{i}.table = table;
+            end
+
+            % started to fuse proposals
+            tmp = info.segpln_Obj;
+            delete('segpln_Obj.mat');
+            save('segpln_Obj','tmp');
+            clear R tmp
+        else  % load segplnObj
+            tmp = load('segpln_Obj');
+            info.segpln_Obj = tmp.tmp;
+            clear tmp
+        end
+        Expan = false;
+        Dproposals = Dproposals(:,:,1:7);
+        vals.visibility = false;
+        [D info.segpln_optim ObjModel] = obj_fuse_proposals(vals, Dproposals, options, info.segpln_Obj, Expan);
+        delete('Final_info.mat','Final_D.mat','Final_Model.mat');
+        save('Final_info','info');
+        save('Final_D','D');
+        save('Final_Model','ObjModel');
+        figure(13);imshow(D);
+        clear Dproposals    
+        cd ..
+    case 'InitialAll'
+        vals.I = images;
+        InitialAll(vals,options);
+    case 'InitialByKey'
+        vals.I = images;
+%         InitialByKey(vals,options);
+        step = 15;
+        Key = LoadKeyFrame();
+        KeyP.K = P.K(:,:,options.KeyFrame);
+        KeyP.R = P.R(:,:,options.KeyFrame);
+        KeyP.T = P.T(:,options.KeyFrame);
+        ref = floor(size(KeyP.K,3)/2);
+        Key = UnifyUsingMeanDiff(Key,KeyP,ref,disps(1)/300);
+        % Use the proposal methods:
+        % SegPln (prototypical segment-based stereo proposals)
+        for f=27:size(P.K,3)
+            if isempty(find(options.KeyFrame == f, 1))
+                continue;
+            end
+            fpath = num2str(f);
+            mkdir(fpath);
+            cd(fpath);
+            mkdir('GMM');
+            key1 = floor(f/step)*step;
+            key2 = ceil(f/step)*step;
+            if key1 == key2 || key2 ==0
+                key2 = key1+step;
+            end
+            useKey = [key1 key2];
+            tmpvals = vals;
+            tmpvals.I = images(useKey);
+            tmpvals.R = repmat(reshape(single(images{f}), [], 3), [2 1]);
+            tmpvals.P.K = P.K(:,:,[f useKey]);
+            tmpvals.P.R = P.R(:,:,[f useKey]);
+            tmpvals.P.T = P.T(:,[f useKey]);
+            tmpvals.useKey = useKey;
+            tmpKey = Key(useKey/step);
+            tmpimages = images([f useKey]);
+            tmpoptions = options;
+            tmpoptions.imout = f;
+            if ~exist('Dproposals.mat');
+                [Dproposals info.segpln_gen] = ojw_segpln(tmpimages, tmpvals.P, disps, images{f}, tmpoptions);
+                tmp = info.segpln_gen;
+                delete('Dproposals.mat','segpln_gen.mat');
+                save('Dproposals','Dproposals');
+                save('segpln_gen','tmp');
+                clear tmp
+            else
+            % load segpln_gen & Dproposals
+                tmp = load('segpln_gen');
+                info.segpln_gen = tmp.tmp;
+                Dproposals = load('Dproposals');
+                Dproposals = Dproposals.Dproposals;
+                clear tmp
+            end
+            % Truncate extreme values in Dproposal
+            % if Truncate the cost may not right
+
+            % object depth segmentation
+            info.segpln_Obj = cell(size(info.segpln_gen.segments,3),1);
+            [X Y] = meshgrid(1:sz(2),1:sz(1));
+            plane = info.segpln_gen.plane;
+
+            % load segpln_Obj
+
+            FsegNum = 0;
+            OsegNum = 0;
+
+
+            if ~exist('segpln_Obj.mat')
+                for i = 1:size(Dproposals,3)
+                    %update segMap(object map) and plane to global numbers
+                    if ~exist(['Obj[' num2str(i) '].mat'])
+                        % try gco
+
+                        segment = info.segpln_gen.segments(:,:,i);
+                        figure(2); sc(segment,'rand');
+                        info.segpln_Obj{i}.F = segment;
+                        info.segpln_Obj{i}.depthPlane = info.segpln_gen.plane{i};
+                        %info.segpln_Obj{i}.F = label_table(segment);
+
+                        segNum = max(max(segment));
+                        h = GCO_Create(segNum,segNum);
+
+                        % set data term
+                        data = zeros(segNum,segNum, 'int32');
+
+                        for sid = 1:segNum %row
+                            N = plane{i}(sid,:)';
+
+                            planeD = -(X * N(1) + Y * N(2) + N(3));
+                            planeD(planeD < vals.d_min) = -2*vals.d_step;
+                            planeD(planeD > vals.d_min+vals.d_step) = 2*vals.d_step;
+                            % planeDiff: 1*pix
+                            planeDiff = abs(planeD(:)-reshape(Dproposals(:,:,i),[],1))/vals.d_step;
+                            data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)';
+                        end
+                        %data = data/max(max(data));
+                        clear planeD planeDiff mapp
+                        tmp = int32(segment(vals.SEI));
+                        % depth diff on boundary
+
+                        DiffObjIdx = repmat(any(diff(int32(segment(vals.SEI))),1), [2 1]);
+                        Neigh = reshape(tmp(DiffObjIdx),2,[]);
+
+                        clear DiffObjIdx meanColor4eachSeg
+                        List = (Neigh(1,:)-1)*int32(segNum)+Neigh(2,:);
+                        List = [List (Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)];
+
+
+                        % boundary length
+                        pixNumInSeg = histc(segment(:),1:segNum);
+                        pixNumInSeg = repmat(pixNumInSeg,[1 segNum]) + repmat(pixNumInSeg',[segNum 1]);
+                        Smooth = zeros(1,segNum*segNum, 'int32');
+                        Smooth = histc(List,1:segNum*segNum);
+                        pixNumInSeg = pixNumInSeg(:) .* (Smooth(:)>0);
+                        pixNumInSeg = 9000/pixNumInSeg(:);
+                        Smooth = Smooth*0.5;
+                        Smooth = ceil(Smooth.*pixNumInSeg);
+                        Smooth = reshape(Smooth,[segNum segNum]);
+                        Smooth(isnan(Smooth))=0;
+
+
+                        clear tmp Neigh List ColorD SmoothNormalize
+                        GCO_SetDataCost(h,data);
+                        GCO_SetNeighbors(h,Smooth);
+                        GCO_Expansion(h);
+                        Label = GCO_GetLabeling(h);
+                        % after relabel
+                        uq = unique(Label);
+                        NewSegNum = numel(uq);
+                        segment = Label(segment);
+                        %---- store segment plane for each object (object plane) for later use 
+                        % info.obj_pln{i} = plane{i}(segment, :);
+                        %----------------------------------------------%
+
+                        tmpL = 1:segNum;
+                        tmpL(uq) = 1:NewSegNum;
+                        segment = tmpL(segment);
+                        info.segpln_Obj{i}.segMap = segment;
+                        info.segpln_Obj{i}.plane = plane{i}(uq,:);
+                        figure(3);
+                        sc(segment,'rand');
+                        fprintf('solving GCO for proposal %d\n', i);
+
+                        clear segment tmpL
+                        clear data smooth
+                        GCO_Delete(h);
+
+                        info.segpln_Obj{i}.F = info.segpln_Obj{i}.F + FsegNum;
+                        info.segpln_Obj{i}.segMap = info.segpln_Obj{i}.segMap + OsegNum;
+                        FsegNum = max(max(info.segpln_Obj{i}.F));
+                        OsegNum = max(max(info.segpln_Obj{i}.segMap));
+
+                        %warp to other view
+                        info.segpln_Obj{i}.otherView = ObjWarp(Dproposals(:,:,i),info.segpln_Obj{i}.F,info.segpln_Obj{i}.segMap,tmpvals.P);           
+                        %calc Model            
+                        ExpFuse = 0;
+                        [info.segpln_Obj{i}.plane info.segpln_Obj{i}.parallax info.segpln_Obj{i}.GMM_Name] = calcObjModel(disps,Dproposals(:,:,i),info.segpln_Obj{i},images{f},f,ExpFuse);
+                        delete(['Obj[' num2str(i) ']']);
+                        tmp = info.segpln_Obj{i};
+                        save(['Obj[' num2str(i) ']'],'tmp');
+                    else
+                        tmp = load(['Obj[' num2str(i) ']']);
+                        info.segpln_Obj{i} = tmp.tmp;
+                        clear tmp;
+                    end
+
+                end
+                % update table
+                OsegNum = max(info.segpln_Obj{14}.segMap(:));
+                for i = 1:size(Dproposals,3)
+                    table = zeros(OsegNum,1,'uint32');
+                    table(unique(info.segpln_Obj{i}.segMap)) = 1:numel(unique(info.segpln_Obj{i}.segMap));
+                    info.segpln_Obj{i}.table = table;
+                end
+
+                % started to fuse proposals
+                tmp = info.segpln_Obj;
+                delete('segpln_Obj.mat');
+                save('segpln_Obj','tmp');
+                clear R tmp
+            else  % load segplnObj
+                tmp = load('segpln_Obj');
+                info.segpln_Obj = tmp.tmp;
+                clear tmp
+            end
+            Expan = false;
+            Dproposals = Dproposals(:,:,1:7);
+            tmpvals.visibility = false;
+            [D info.segpln_optim ObjModel] = obj_fuse_proposals(tmpvals, Dproposals, tmpoptions, info.segpln_Obj, Expan);
+            delete('Final_info.mat','Final_D.mat','Final_Model.mat');
+            save('Final_info','info');
+            save('Final_D','D');
+            save('Final_Model','ObjModel');
+            figure(13);imshow(D);
+            clear Dproposals    
+            cd ..
+        end
+    case 'FilterOut'
+        vals.I = images;
+%         InitialByKey(vals,options);
+        step = 15;
+        Key = LoadKeyFrame();
+        KeyP.K = P.K(:,:,options.KeyFrame);
+        KeyP.R = P.R(:,:,options.KeyFrame);
+        KeyP.T = P.T(:,options.KeyFrame);
+        Key = UnifyUsingThr(Key,KeyP);
+        % Use the proposal methods:
+        FilterKey(vals,options,Key,KeyP);
     end
-     
-    
-    % started to fuse proposals
-    tmp = info.segpln_Obj;
-	save('segplnRight7_Obj','tmp');
-    clear R tmp
-    [D info.segpln_optim] = obj_fuse_proposals(vals, Dproposals, options, info);
-    save('Final_info','info');
-    save('Final_D','D');
-    figure(13);imshow(D);
-    clear Dproposals    
 else
     sprintf('dont go here');
 end

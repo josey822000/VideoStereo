@@ -1,32 +1,5 @@
 function [D info] = ojw_segpln(images, P, disps, R, options)
-%OJW_SEGPLN  Generate piecewise-planar disparity proposals for stereo
-%
-%   [D info] = ojw_segpln(images, P, disps, R, options)
-%
-% Generates a set of disparity map proposals for the first input image.
-%
-%IN:
-%   images - 1xN cell array of input images, excluding the reference image.
-%   P - 3x4xN array of projection matrices for the input images, relative
-%       to the output image.
-%   disps - 1xM list of disparities to sample at.
-%   R - HxWxC reference image.
-%   options - optional parameters, given by pairs of arguments, the first
-%             being the option name and the second being the value. Some
-%             example options are:
-%       col_thresh - scalar noise parameter for data likelihood.
-%       window - scalar: window*2+1 is the width of window to use in
-%                matching.
-%
-% OUT:
-%   D - HxWxP disparity proposals.
-%   info - structure containing the following informational data:
-%      corr - HxW matrix of maximum correlation scores for
-%             each pixel in the reference image.
-%      disp - HxW matrix of disparities at which the maximum
-%             correlation score occured.
-%      segments - HxWxP segmentations used to generate
-%                 proposals.
+
 
 % $Id: ojw_segpln.m,v 1.1 2007/12/11 13:29:44 ojw Exp $
 
@@ -38,32 +11,6 @@ end
 ephoto = @(F) log(2) - log(exp(sum((F-reshape(double(R), [], sz(3))) .^ 2, 2)*(-1/(options.col_thresh*sz(3))))+1);
 R = uint8(R);
 [X Y] = meshgrid(1:sz(2), 1:sz(1));
-<<<<<<< HEAD
-WC = ones(sz(1)*sz(2), 3);
-WC(:,1) = X(:);
-WC(:,2) = Y(:);
-X = sz - 2 * options.window;
-corr = zeros(X(1), X(2), numel(disps));
-filt = fspecial('average', [1 1+2*options.window]);
-% For each image...
-for a = 1:numel(images)
-    % Project the points
-    X = WC * P(:,1:3,a)';
-    P_ = P(:,4,a);
-
-    % For each disparity...
-    for b = 1:numel(disps)
-        % Vary image coordinates according to disparity
-        d = disps(b) * P_;
-        Z = 1 ./ (X(:,3) + d(3));
-
-        % Look up the colours
-        Y = squeeze(vgg_interp2(images{a}, (X(:,1) + d(1)) .* Z, (X(:,2) + d(2)) .* Z, 'linear', -1000));
-
-=======
-% WC = ones(sz(1)*sz(2), 3);
-% WC(:,1) = X(:);
-% WC(:,2) = Y(:);
 pts = ones(sz(1)*sz(2), 3);
 pts(:,1) = X(:);
 pts(:,2) = Y(:);
@@ -79,63 +26,83 @@ epl_pts = zeros(num_pixels, 3);
 Kf = P.K(:,:,1);
 Rf = P.R(:,:,1);
 Tf = P.T(:,1);
+switch options.act
+    case 'InitialKey'
+        corr = ReadJiaya([options.sequence '_' num2str(options.imout-1) '.txt']);
+        sprintf('LoadJiaya')
+    case 'InitialByKey'
+        sprintf('LoadMeanD')
+        tmp = load([options.sequence '_' num2str(options.imout-1) '.mat']);
+        meanD = tmp.finalD;
+        clear tmp;
+        for a = 2:numel(images)
+            K2 = P.K(:,:,a);
+            R2 = P.R(:,:,a);
+            T2 = P.T(:,a);
+            tmp_mat = K2 * R2' * Rf;
+            tmp_vec = K2 * R2' * ( Tf - T2);
+            tmp_vec = repmat(tmp_vec, [1 num_pixels]);
+            for b = 1:numel(disps)
+                epl_pts(:, :) = ( tmp_mat * (Kf\(pts(:,:)')) + disps(b) * tmp_vec )';
+                epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
+                % Look up the colours
+                Y = squeeze(vgg_interp2(images{a}, epl_pts(:,1), epl_pts(:,2), 'linear', -1000));
+                % Calculate the RSSD
+                Y = ephoto(Y);
+                Y = conv2(filt, filt', reshape(Y, sz(1:2)), 'valid');
+                corr(:,:,b) = corr(:,:,b) + Y;
+            end
+        end
+        clear epl_pts;
+        clear pts;
 
-for a = 2:numel(images)
-    K2 = P.K(:,:,a);
-    R2 = P.R(:,:,a);
-    T2 = P.T(:,a);
-    tmp_mat = Kf * R2' * Rf;
-    tmp_vec = K2' * R2' * ( Tf - T2);
-    tmp_vec = repmat(tmp_vec, [1 num_pixels]);
-    for b = 1:numel(disps)
-        epl_pts(:, :) = ( tmp_mat * Kf\(pts(:,:)') + disps(b) * tmp_vec )';
-     
-        % Look up the colours
-        Y = squeeze(vgg_interp2(images{a}, epl_pts(:,1), epl_pts(:,2), 'linear', -1000));
->>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
-        % Calculate the RSSD
-        Y = ephoto(Y);
-        Y = conv2(filt, filt', reshape(Y, sz(1:2)), 'valid');
-        corr(:,:,b) = corr(:,:,b) + Y;
-    end
+        % Normalize
+        X = ephoto(-1000) * numel(images);
+        corr = (X(1) - corr) / X(1);
+        clear X Y Z h1 h2
+
+        % Extract highest scoring matches (winner takes all)
+        [info.corr corr] = max(corr, [], 3);
+        corr = disps(corr);
+        % corr(info.corr<0.07) = 0;
+        corr = padarray(corr, options.window([1 1]), 'symmetric'); % Return to original size
+        HoleMap = meanD == Inf;
+        meanD(HoleMap) = corr(HoleMap);
+        corr = meanD;
+    case ''
+        sprintf('UseMatching');
+        for a = 2:numel(images)
+            K2 = P.K(:,:,a);
+            R2 = P.R(:,:,a);
+            T2 = P.T(:,a);
+            tmp_mat = K2 * R2' * Rf;
+            tmp_vec = K2 * R2' * ( Tf - T2);
+            tmp_vec = repmat(tmp_vec, [1 num_pixels]);
+            for b = 1:numel(disps)
+                epl_pts(:, :) = ( tmp_mat * (Kf\(pts(:,:)')) + disps(b) * tmp_vec )';
+                epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
+                % Look up the colours
+                Y = squeeze(vgg_interp2(images{a}, epl_pts(:,1), epl_pts(:,2), 'linear', -1000));
+                % Calculate the RSSD
+                Y = ephoto(Y);
+                Y = conv2(filt, filt', reshape(Y, sz(1:2)), 'valid');
+                corr(:,:,b) = corr(:,:,b) + Y;
+            end
+        end
+        clear epl_pts;
+        clear pts;
+
+        % Normalize
+        X = ephoto(-1000) * numel(images);
+        corr = (X(1) - corr) / X(1);
+        clear X Y Z h1 h2
+
+        % Extract highest scoring matches (winner takes all)
+        [info.corr corr] = max(corr, [], 3);
+        corr = disps(corr);
+        % corr(info.corr<0.07) = 0;
+        corr = padarray(corr, options.window([1 1]), 'symmetric'); % Return to original size
 end
-<<<<<<< HEAD
-=======
-clear epl_pts;
-clear pts;
-%
-
-% For each image...
-%     for a = 1:numel(images)
-%         % Project the points
-%         X = WC * P.P(:,1:3,a)';
-%         P_ = P.P(:,4,a);
-%         % For each disparity...
-%         for b = 1:numel(disps)
-%             % Vary image coordinates according to disparity
-%             d = disps(b) * P_;
-%             Z = 1 ./ (X(:,3) + d(3));
-%             % Look up the colours
-%             Y = squeeze(vgg_interp2(images{a}, (X(:,1) + d(1)) .* Z, (X(:,2) + d(2)) .* Z, 'linear', -1000));
-%             % Calculate the RSSD
-%             Y = ephoto(Y);
-%             Y = conv2(filt, filt', reshape(Y, sz(1:2)), 'valid');
-%             corr(:,:,b) = corr(:,:,b) + Y;
-%         end
-%     end
-
->>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
-% Normalize
-X = ephoto(-1000) * numel(images);
-corr = (X(1) - corr) / X(1);
-clear X Y Z h1 h2
-
-% Extract highest scoring matches (winner takes all)
-[info.corr corr] = max(corr, [], 3);
-corr = disps(corr);
-corr(info.corr<0.07) = 0;
-corr = padarray(corr, options.window([1 1]), 'symmetric'); % Return to original size
-
 % Generate image segmentations
 if size(R, 3) == 1
     R = repmat(R, [1 1 3]);
@@ -144,15 +111,25 @@ segment_params = [1 1.5 10 100];
 mults = [1:7 3 5 8 12 24 50 100];
 nMaps = numel(mults);
 info.segments = zeros(sz(1), sz(2), nMaps, 'uint32');
-for b = 1:nMaps
-    sp = segment_params * mults(b);
-    if b < 8
-        % Segment the image using mean shift
-        info.segments(:,:,b) = vgg_segment_ms(R, sp(1), sp(2), sp(3));
-    else
-        % Segment the image using Felzenszwalb's method
-        info.segments(:,:,b) = vgg_segment_gb(R, 0, sp(4), sp(3), 1);
+if ~exist('segments.mat')
+    for b = 1:nMaps
+        sp = segment_params * mults(b);
+        if b < 8
+            % Segment the image using mean shift
+            info.segments(:,:,b) = vgg_segment_ms(R, sp(1), sp(2), sp(3));
+        else
+            % Segment the image using Felzenszwalb's method
+            info.segments(:,:,b) = vgg_segment_gb(R, 0, sp(4), sp(3), 1);
+        end
+
     end
+    tmp = info.segments;
+    save('segments','tmp');
+    clear tmp;
+else
+    tmp = load('segments');
+    info.segments = tmp.tmp;
+    clear tmp;
 end
 clear A
 
@@ -162,13 +139,10 @@ WC = zeros(sz(2)*sz(1), 3);
 WC(:,3) = 1 ./ corr(:);
 WC(:,2) = WC(:,3) .* Y(:);
 WC(:,1) = WC(:,3) .* X(:);
-<<<<<<< HEAD
-=======
-WC(:,:) = ( Kf \ WC(:,:)' )';
-tmp_vec = repmat(Tf, [1 num_pixels]);
-WC(:,:) = (Rf * WC(:,:)' + tmp_vec)';
+% WC(:,:) = ( Kf \ WC(:,:)' )';
+% tmp_vec = repmat(Tf, [1 num_pixels]);
+% WC(:,:) = (Rf * WC(:,:)' + tmp_vec)';
 clear tmp_vec
->>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 clear X Y
 
 % Switch off annoying warnings
@@ -179,13 +153,9 @@ warning off MATLAB:nearlySingularMatrix
 warning off MATLAB:illConditionedMatrix
 warning off MATLAB:rankDeficientMatrix
 
-<<<<<<< HEAD
-=======
-
->>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 % Generate piecewise-planar disparity maps
 D = zeros(sz(1)*sz(2), nMaps);
-rt = 0.1; %2 * min(abs(diff(Z(:))));
+rt = 0.1;%2 * min(abs(diff(WC(:,3))));
 info.plane = cell(nMaps,1);
 for b = 1:nMaps
     plane = zeros(max(max(info.segments(:,:,b))),3);
@@ -198,52 +168,41 @@ for b = 1:nMaps
         if size(N, 1) > 3
             % Ransac to weed out outliers
             M_ = rplane(N, rt);
-            N = N(M_,:);
+            N_ = N(M_,:);
         end
-<<<<<<< HEAD
-
-        % Find least squares plane from inliers
-        N = N \ repmat(-1, [size(N, 1) 1]);
-        plane(a,:) = N;
-        [Y X] = ind2sub(sz, find(M));
-        D(M,b) = -(X * N(1) + Y * N(2) + N(3));
-    end
-    info.plane{b} = plane;
-end
-=======
         %debug
         % Find least squares plane from inliers
-        N = N \ repmat(-1, [size(N, 1) 1]);
+        if size(N,1) <3
+            N = N \ repmat(-1, [size(N, 1) 1]);
+        else
+            N = N_ \ repmat(-1, [size(N_, 1) 1]);
+        end
         plane(a,:) = N;
         if(isnan(N(1)) || isnan(N(2)) || isnan(N(3)))
             fprintf('plane calculation is wrong\n');
-            N = 0;
-            plane(a,:) = 0;
+            N = [0;0;1];
+            plane(a,:) = N;
         end
         
         [Y X] = ind2sub(sz, find(M));
         
         %modify disparity calculation using R, T
-        N = [ (N' * Rf(:, 1))  (N' * Rf(:, 2))  (N' * Rf(:, 3)) ] / ( N' * Tf + 1) ; 
+        
+%         pts = [X';Y';ones(size(X))'];
+%         D(M,b) = (N'*Rf*(Kf\pts))/(- N' * Tf - 1);
         D(M,b) = -(X * N(1) + Y * N(2) + N(3));
-      
+        
     end
     info.plane{b} = plane;
+    
 end
+D(D>disps(1)) = disps(1);
+D(D<0) = 0;
 %---------------%
 %Unify labels of 3D planes for all proposals
 %Model 3D parameter space as a BSP
 %plane label starts from 1, not 0
-min_val = zeros(1, 3);
-max_val = zeros(1, 3);
-min_val(:) = min(info.plane{1}( :, :) );
-max_val(:) = max(info.plane{1}( :, :) );
-for b = 2:nMaps
-    for c = 1:3
-        min_val(c) = min( min(info.plane{b}( :, c) ) , min_val(c) );
-        max_val(c) = max( max(info.plane{b}( :, c) ) , max_val(c) );
-    end
-end
+
 
 
 % num_hierarchy = 5;
@@ -280,7 +239,6 @@ end
 
 
 %---------------%
->>>>>>> b1e7dfff9d842e16e9573243fd1d95e9f0f376d4
 
 % Reset warnings
 warning(warning_state);

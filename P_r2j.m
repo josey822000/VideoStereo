@@ -28,9 +28,9 @@ if nargin > 2
     for a = 1:size(Pj.P, 3)
         T(:,a) = -Pj.P(:,1:3,a) \ Pj.P(:,4,a);
     end
-    order = ojw_bsxfun(@minus, T, -Pr.P(:,1:3) \ Pr.P(:,4));
-    [T order] = sort(sum(order .^ 2));
-    closest = order(closest);
+%     order = ojw_bsxfun(@minus, T, -Pr.P(:,1:3) \ Pr.P(:,4));
+%     [T order] = sort(sum(order .^ 2));
+%     closest = order(closest);
     %update K,R,T,P
     Pj.K = Pj.K(:,:,closest);
     Pj.R = Pj.R(:,:,closest);
