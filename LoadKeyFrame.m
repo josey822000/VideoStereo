@@ -50,7 +50,7 @@ sz = size(F);
 FIds = unique(F);
 segNum = numel(unique(F));
 plane = zeros(segNum,3);
-figure(2);imshow(D/0.0087);
+% figure(2);imshow(D/0.0087);
 
 [X Y] = meshgrid(1:sz(2), 1:sz(1));
 WC = zeros(sz(2)*sz(1), 3);
@@ -70,8 +70,6 @@ for i=1:segNum
 		% Ransac to weed out outliers
 		M_ = rplane(N, rt);
 		N = N(M_,:);
-    else
-        continue;
     end
     
 	% Find least squares plane from inliers
@@ -79,7 +77,7 @@ for i=1:segNum
 	plane(i,:) = N;
     tmpD(M) = -(X(M) * N(1) + Y(M) * N(2) + N(3));
 end
-figure(3);imshow(tmpD/0.0087);
+% figure(3);imshow(tmpD/0.0087);
 % Reset warnings
 warning(warning_state);
 end

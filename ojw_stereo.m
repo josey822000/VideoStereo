@@ -514,6 +514,19 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         Key = UnifyUsingThr(Key,KeyP);
         % Use the proposal methods:
         FilterKey(vals,options,Key,KeyP);
+    case 'TubeFuse'
+        Key = LoadKeyFrame();
+        KeyP.K = P.K(:,:,options.KeyFrame);
+        KeyP.R = P.R(:,:,options.KeyFrame);
+        KeyP.T = P.T(:,options.KeyFrame);
+        WarpedInfo = WarpAll(Key,KeyP);
+        LittleWindowModel = TrackingBased(Key,KeyP,[300 185],8,[100 100],WarpedInfo);
+        % doing fusion , can it combine??
+        ObjTube = TrackingFusion(LittleWindowModel,KeyP);
+        % update region
+        for i=1:size(Key)
+            Key.Model.segMap(position(1):position(1)+WinSz(1),position(2):position(2)+winSz(2)) = ObjTube(:,:,i);
+        end    
     end
 else
     sprintf('dont go here');

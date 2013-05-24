@@ -1,7 +1,7 @@
 % Load default options for the desired algorithm
 % algs = {'InitialKey'};
 % algs = {'InitialAll'};
-algs = {'InitialByKey'};
+algs = {'TubeFuse'};
 options = ojw_default_options(algs{1});
 close all;
 % In the case of stereo, download the desired sequence
