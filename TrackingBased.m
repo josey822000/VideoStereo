@@ -7,13 +7,9 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
 %   WinSz: window size
 %   Detailed explanation goes here
     % take out window
-    ObjTube = zeros([Winsz size(Key)],class(Key{1}.Model.segMap));
-    DispTube = zeros([Winsz size(Key)]);
+
     sz = size(Key{1}.D);
-    [X Y] = meshgrid(1:sz(2), 1:sz(1));
-    ptsAll = ones(sz(1)*sz(2), 3);
-    ptsAll(:,1) = X(:);
-    ptsAll(:,2) = Y(:);
+    
     pts = [Pos 1]';
     % get tube from a ref frame warp by disparity
     WindowModel = cell(size(Key),1);
@@ -39,9 +35,9 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
         epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
         % save the window point
         WindowModel{i}.pts = epl_pts(1:2);
-        figure(i+1); imshow(Key{i}.D/0.0053); hold on; DrawCircle(epl_pts(1), epl_pts(2), 3, 5, 'r');
+        figure(i+1); imshow(Key{i}.D/0.0053); hold on; rectangle('Position',[epl_pts(2)-Winsz(2) epl_pts(2)+Winsz(2) 2*Winsz(1) 2*Winsz(1)]);
         % object
-        WindowModel{i}.segMap = Key{i}.Model.segMap(epl_pts(2):epl_pts(2)+Winsz(2), epl_pts(1):epl_pts(1)+Winsz(1));
+        WindowModel{i}.segMap = Key{i}.Model.segMap(epl_pts(2)-Winsz(2):epl_pts(2)+Winsz(2), epl_pts(1)-Winsz(1):epl_pts(1)+Winsz(1));
         ObjCollect = [ObjCollect ;unique(WindowModel{i}.segMap)];
         ObjId = unique(WindowModel{i}.segMap);
         WindowModel{i}.table = 1:numel(Key{i}.Model.table);
@@ -50,9 +46,9 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
         WindowModel{i}.parallax = Key{i}.Model.parallax(Key{i}.Model.table(ObjId),:);
         WindowModel{i}.GMM_Name = Key{i}.Model.GMM_Name(Key{i}.Model.table(ObjId));
         % f
-        WindowModel{i}.F = Key{i}.Model.F(Pos(2):Pos(2)+Winsz(2), Pos(1):Pos(1)+Winsz(1));
+        WindowModel{i}.F = Key{i}.Model.F(epl_pts(2)-Winsz(2):epl_pts(2)+Winsz(2), epl_pts(1)-Winsz(1):epl_pts(1)+Winsz(1));
         % D
-        WindowModel{i}.D = Key{i}.D(Pos(2):Pos(2)+Winsz(2),Pos(1):Pos(1)+Winsz(1));
+        WindowModel{i}.D = Key{i}.D(epl_pts(2)-Winsz(2):epl_pts(2)+Winsz(2), epl_pts(1)-Winsz(1):epl_pts(1)+Winsz(1));
         
         
     end
@@ -60,8 +56,8 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
     % Model -> for each object 
     %       Frame -> for each frame in Tube
     %             F, segMap , table , GMM, parallax
-    Model = cell(numel(unique(ObjTube)),1);
-    for i=1:size(numel(unique(ObjTube)))
+    Model = cell(numel(unique(ObjCollect)),1);
+    for i=1:size(numel(unique(ObjCollect)))
         Model{i} = cell(size(Key),1);
     end
     for i=1:size(Key)
@@ -70,9 +66,9 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
         % warp segMap warp F of this object
         for view = 1:size(Key)
             % get warped info F,segMap,D from WarpedInfo
-            WarpedF = WarpedInfo{i,view}.F(WindowModel{view}.pts(2):WindowModel{view}.pts(2)+Winsz(2), WindowModel{view}.pts(1):WindowModel{view}.pts(1)+Winsz(1));
-            WarpedObj = WarpedInfo{i,view}.segMap(WindowModel{view}.pts(2):WindowModel{view}.pts(2)+Winsz(2), WindowModel{view}.pts(1):WindowModel{view}.pts(1)+Winsz(1));
-            WarpedD = WarpedInfo{i,view}.D(WindowModel{view}.pts(2):WindowModel{view}.pts(2)+Winsz(2), WindowModel{view}.pts(1):WindowModel{view}.pts(1)+Winsz(1));
+            WarpedF = WarpedInfo{i,view}.F(WindowModel{view}.pts(2)-Winsz(2):WindowModel{view}.pts(2)+Winsz(2), WindowModel{view}.pts(1)-Winsz(1):WindowModel{view}.pts(1)+Winsz(1));
+            WarpedObj = WarpedInfo{i,view}.segMap(WindowModel{view}.pts(2)-Winsz(2):WindowModel{view}.pts(2)+Winsz(2), WindowModel{view}.pts(1)-Winsz(1):WindowModel{view}.pts(1)+Winsz(1));
+            WarpedD = WarpedInfo{i,view}.D(WindowModel{view}.pts(2)-Winsz(2):WindowModel{view}.pts(2)+Winsz(2), WindowModel{view}.pts(1)-Winsz(1):WindowModel{view}.pts(1)+Winsz(1));
             for j=1:numel(ObjId)
                 if view == i 
                     Model{j}{i}.D = WindowModel{i}.D;
