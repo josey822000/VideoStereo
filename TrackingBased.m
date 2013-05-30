@@ -35,7 +35,7 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
         epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
         % save the window point
         WindowModel{i}.pts = epl_pts(1:2);
-        figure(i+1); imshow(Key{i}.D/0.0053); hold on; rectangle('Position',[epl_pts(2)-Winsz(2) epl_pts(2)+Winsz(2) 2*Winsz(1) 2*Winsz(1)]);
+        figure(i+1); imshow(Key{i}.D/0.0053); hold on; rectangle('Position',[epl_pts(1)-Winsz(1) epl_pts(2)-Winsz(2) 2*Winsz(1) 2*Winsz(2)]);
         % object
         WindowModel{i}.segMap = Key{i}.Model.segMap(epl_pts(2)-Winsz(2):epl_pts(2)+Winsz(2), epl_pts(1)-Winsz(1):epl_pts(1)+Winsz(1));
         ObjCollect = [ObjCollect ;unique(WindowModel{i}.segMap)];
@@ -57,7 +57,7 @@ function Model = TrackingBased( Key, KeyP, Pos , Ref ,Winsz, WarpedInfo)
     %       Frame -> for each frame in Tube
     %             F, segMap , table , GMM, parallax
     Model = cell(numel(unique(ObjCollect)),1);
-    for i=1:size(numel(unique(ObjCollect)))
+    for i=1:numel(unique(ObjCollect))
         Model{i} = cell(size(Key),1);
     end
     for i=1:size(Key)
