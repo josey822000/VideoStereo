@@ -78,8 +78,22 @@ P = vals.P;
 Kf = P.K(:,:,1);
 Rf = P.R(:,:,1);
 Tf = P.T(:,1);
-for a = 1:num_in
+refIdx = 2:num_in+1;
+refIdx(end) = num_in-1;
+%{
+nodes size : windowsz * tubesz
+neighbor : a little SEI, can be construct outside or inside
+for every window in tube
+    calc the GMM cost
+    calc the parallax cost
+    calc ocoh
+    calc pcoh
+end
+solve
+%}
+for a = 1:tubesz
     % Calculate the coordinates in the input image
+    %{
     K2 = P.K(:,:,a+1);
     R2 = P.R(:,:,a+1);
     T2 = P.T(:,a+1);
@@ -90,14 +104,15 @@ for a = 1:num_in
     epl_pts1 = epl_pts1 ./ repmat(epl_pts1(:,3),[1 3]);
     epl_pts2 = ( tmp_mat * (Kf\(pts(:,:)')) + repmat(D2(:)',[3 1]) .* tmp_vec )';
     epl_pts2 = epl_pts2 ./ repmat(epl_pts2(:,3),[1 3]);
+    %}
     % Epc
     % D1,D2
-    [mpD1 mpD2 Check1 Check2 outB1 outB2] = warp2DepthConsiderNoise(D1,D2,D1_Obj,D2_Obj,D1_Obj.otherView{a},D2_Obj.otherView{a},epl_pts1,epl_pts2);
+%     [mpD1 mpD2 Check1 Check2 outB1 outB2] = warp2DepthConsiderNoise(D1,D2,D1_Obj,D2_Obj,D1_Obj.otherView{a},D2_Obj.otherView{a},epl_pts1,epl_pts2);
 %     figure(6);
 %     imshow(Check1);
 %     figure(7);
 %     imshow(Check2);
-
+    %{
     Check = [reshape(Check1,[],1); reshape(Check2,[],1)] ;
     
     Dp = [reshape(D1,[],1) ; reshape(D2,[],1)];
@@ -116,14 +131,15 @@ for a = 1:num_in
     CheckDisRange = [reshape(D1>=0 & D1<=vals.d_step,[],1); reshape(D2>=0 & D2<=vals.d_step,[],1)];
     occ = occ & CheckDisRange;
     Check = Check & CheckDisRange;
+    %}
 %     figure(8);imshow(reshape(occ(1:end/2).*lambdaOcc+Check1(:).*M(1:end/2),size(Check1))/max(max(M(1:end/2))));
 %     figure(9);imshow(reshape(occ(end/2+1:end).*lambdaOcc+Check2(:).*M(end/2+1:end),size(Check1))/max(max(M(end/2+1:end))));
-    Epc = reshape((occ.*lambdaOcc + Check.*M) + (~(occ|Check))*1000000, tp, 2);
+%     Epc = reshape((occ.*lambdaOcc + Check.*M) + (~(occ|Check))*1000000, tp, 2);
 %     figure(10);
 %     imshow(reshape(~(occ(1:end/2)|Check(1:end/2)),size(Check1)));
 %     figure(11);
 %     imshow(reshape(~(occ(end/2+1:end)|Check(end/2+1:end)),size(Check1)));
-    clear M N Check V1 V2 occ ObjCheck DepCheck CheckDisRange
+%     clear M N Check V1 V2 occ ObjCheck DepCheck CheckDisRange
     % Obj Color term
     Ecol = reshape(lambdaColor*-GMM(vals.R,D1_Obj.segMap,D2_Obj.segMap,D1_Obj.GMM_Name,D2_Obj.GMM_Name,D1_Obj.table,D2_Obj.table),tp,2);
     
