@@ -26,7 +26,7 @@ end
 
 % Cache the input data
 [images P disps] = ojw_setup(options, Pout);
-
+options.step = disps(1)/(size(disps,2)-1);
 % Get the output image dimensions
 if isfield(options, 'dim_out') && ~isempty(options.dim_out)
     sz = options.dim_out([4 3]);

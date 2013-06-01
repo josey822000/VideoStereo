@@ -189,6 +189,33 @@ switch algorithm
         options.proposal_method = 5; % SameUni, SegPln, Smooth
         % Data gathering parameters
         options.save_name = 'tmpInfo'; % Filename to save frames in
+    case {'ALL'}
+        options.act = 'ALL';
+        options.render_func = 'ojw_stereo';
+        options.planar = false; % Dont Use a planar prior
+        % Default energy parameters
+        options.disp_thresh = 0.02;
+        options.smoothness_kernel = 1; % 1: truncated linear kernel; 2: truncated quadratic kernel
+        options.col_thresh = 30;
+        options.occl_const = 0.01;
+        options.lambda_l = 9;
+        options.lambda_h = 108;
+        options.seg_params = [4 5 0];
+        % Optimization settings
+        options.connect = 4; % 4 connected (bi-directional) or 8 connected (quad-directional) graph
+        options.contract = 0; % Use QPBOP with n contractions
+        options.improve = 0; % 0: QPBO-F, 1: QPBOI-F, 2: QPBO-R, 3: QPBO-L, 4:QPBOI-R
+        options.visibility = true; % Employ the geometrical visbility contstraint
+        options.compress_graph = false; % Compression makes graph smaller, but is generally slower over all
+        options.max_iters = 3000; % Maximum number of iterations
+        options.converge = 0.01; % Loop until percentage decrease in energy per loop is less than options.converge (=> 101 == loop once)
+        options.average_over = 20; % Number of iterations to average over when checking convergence
+        options.independent = false; % Use strongly-connected, rather than independent, regions
+        options.window = 2; % Half-size of window to use in window matching
+        %options.proposal_method = 1:3; % SameUni, SegPln, Smooth
+        options.proposal_method = 5; % SameUni, SegPln, Smooth
+        % Data gathering parameters
+        options.save_name = 'tmpInfo'; % Filename to save frames in
     otherwise
         error('Algorithm not recognised');
 end

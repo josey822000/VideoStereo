@@ -27,9 +27,9 @@ Kf = P.K(:,:,1);
 Rf = P.R(:,:,1);
 Tf = P.T(:,1);
 switch options.act
-    case 'InitialKey'
-        corr = ReadJiaya([options.sequence '_' num2str(options.imout-1) '.txt']);
-        sprintf('LoadJiaya')
+    case {'InitialKey','ALL'}
+        corr = ReadJiaya([options.sequence '_' num2str(options.current-1) '.txt'],sz(1:2));
+        disp('LoadJiaya')
     case 'InitialByKey'
         sprintf('LoadMeanD')
         tmp = load([options.sequence '_' num2str(options.imout-1) '.mat']);
@@ -108,10 +108,11 @@ if size(R, 3) == 1
     R = repmat(R, [1 1 3]);
 end
 segment_params = [1 1.5 10 100];
-mults = [1:7 3 5 8 12 24 50 100];
+%mults = [1:7 3 5 8 12 24 50 100];
+mults = 1:7;
 nMaps = numel(mults);
 info.segments = zeros(sz(1), sz(2), nMaps, 'uint32');
-if ~exist('segments.mat')
+if ~exist(fullfile(options.PATH,'segments.mat'))
     for b = 1:nMaps
         sp = segment_params * mults(b);
         if b < 8
@@ -123,13 +124,11 @@ if ~exist('segments.mat')
         end
 
     end
-    tmp = info.segments;
-    save('segments','tmp');
-    clear tmp;
+    save(fullfile(options.PATH,'segments.mat'),'-struct','info','segments');
 else
-    tmp = load('segments');
-    info.segments = tmp.tmp;
-    clear tmp;
+    load(fullfile(options.PATH,'segments.mat'));
+    info.segments = segments;
+    clear segments;
 end
 clear A
 
