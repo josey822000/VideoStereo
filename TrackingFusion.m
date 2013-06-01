@@ -2,6 +2,7 @@ function [D info ObjModel] = TrackingFusion(vals, Model, options)
 % $Id: ojw_stereo_optim.m,v 1.2 2008/11/17 11:27:35 ojw Exp $
 
 % Create initial arrays
+options.average_over= size(Model,1);
 info.map = zeros(vals.sz, 'uint16');
 max_iters = options.max_iters + options.average_over + 1;
 info.energy = zeros(max_iters, numel(vals.improve));
@@ -48,10 +49,10 @@ while (1-(info.energy(iter,end)/info.energy(iter-options.average_over,end)) > op
         iter = iter - 1;
         break;
     end
-    fprintf(['iter: ' num2str(n)]);
+    disp(['iter: ' num2str(n)]);
     
     
-    nowModel = RefreshObj(M,nowModel,newModel,R,iter,vals.disps,vals.SEI,P);
+    nowModel = RefreshObj(M,nowModel,newModel);
     
     % 
     info.map(M) = iter;
@@ -61,6 +62,7 @@ while (1-(info.energy(iter,end)/info.energy(iter-options.average_over,end)) > op
     % Record progress of disparity map
     save_progress(options.save_name, 'info');
 end
+save('nowModel','nowModel');
 [D ObjModel] = RefitObj(nowModel,R,options.imout,vals.disps,vals.SEI,P);
 if nargout > 1
     % Save stats
@@ -73,35 +75,39 @@ if nargout > 1
 end
 return
 
-function [D ObjModel] = RefreshObj(M,nowModel,newModel,R,iter,disps,SEI,P)
+function nowModel = RefreshObj(Map,nowModel,newModel)
     % Switch off annoying warnings
-    table = zeros(numel(ObjModel.table),1,'uint32');
-    D(M) = Dnew(M);
-    oldNum = numel(unique(ObjModel.segMap(~M)));
-    oldObjId = ObjModel.table(unique(ObjModel.segMap(~M)));
-    table(unique(ObjModel.segMap(~M))) = 1:numel(oldObjId);
-    newObjId = DnewModel.table(unique(DnewModel.segMap(M)));
-    table(unique(DnewModel.segMap(M))) = oldNum+uint32((1:numel(newObjId)));
-    
-    
-    ObjModel.GMM_Name = ObjModel.GMM_Name(ObjModel.table(unique(ObjModel.segMap(~M))));
-    ObjModel.GMM_Name = [ObjModel.GMM_Name; DnewModel.GMM_Name(DnewModel.table(unique(DnewModel.segMap(M))))];
-    
-    ObjModel.parallax = ObjModel.parallax(ObjModel.table(unique(ObjModel.segMap(~M))),:);
-    ObjModel.parallax = [ObjModel.parallax; DnewModel.parallax(DnewModel.table(unique(DnewModel.segMap(M))),:)];
-    
-    ObjModel.plane = ObjModel.plane(ObjModel.table(unique(ObjModel.segMap(~M))),:);
-    ObjModel.plane = [ObjModel.plane; DnewModel.plane(DnewModel.table(unique(DnewModel.segMap(M))),:)];
-    
-    ObjModel.table = table;
-    
-    ObjModel.segMap(M) = DnewModel.segMap(M);
-    ObjModel.F(M) = DnewModel.F(M);
-	
-    ObjModel.otherView = ObjWarp(D,ObjModel.F,ObjModel.segMap,P);
-    disp(numel(unique(ObjModel.segMap)));
-    
-    % Reset warnings
+    tp = numel(nowModel{1}.D);
+    for w=1:size(nowModel,1)
+        M = Map((w-1)*tp+1:w*tp);
+        table = zeros(numel(nowModel{w}.table),1,'uint32');
+        nowModel{w}.D(M) = newModel{w}.D(M);
+        oldNum = numel(unique(nowModel{w}.segMap(~M)));
+        oldObjId = nowModel{w}.table(unique(nowModel{w}.segMap(~M)));
+        table(unique(nowModel{w}.segMap(~M))) = 1:numel(oldObjId);
+        newObjId = newModel{w}.table(unique(newModel{w}.segMap(M)));
+        table(unique(newModel{w}.segMap(M))) = oldNum+uint32((1:numel(newObjId)));
+
+
+        nowModel{w}.GMM_Name = nowModel{w}.GMM_Name(nowModel{w}.table(unique(nowModel{w}.segMap(~M))));
+        nowModel{w}.GMM_Name = [nowModel{w}.GMM_Name; newModel{w}.GMM_Name(newModel{w}.table(unique(newModel{w}.segMap(M))))];
+
+        nowModel{w}.parallax = nowModel{w}.parallax(nowModel{w}.table(unique(nowModel{w}.segMap(~M))),:);
+        nowModel{w}.parallax = [nowModel{w}.parallax; newModel{w}.parallax(newModel{w}.table(unique(newModel{w}.segMap(M))),:)];
+
+        nowModel{w}.plane = nowModel{w}.plane(nowModel{w}.table(unique(nowModel{w}.segMap(~M))),:);
+        nowModel{w}.plane = [nowModel{w}.plane; newModel{w}.plane(newModel{w}.table(unique(newModel{w}.segMap(M))),:)];
+
+        nowModel{w}.table = table;
+
+        nowModel{w}.segMap(M) = newModel{w}.segMap(M);
+        nowModel{w}.F(M) = newModel{w}.F(M);
+
+%         nowModel{w}.otherView = ObjWarp(nowModel{w}.D,nowModel{w}.F,nowModel{w}.segMap,P);
+%         disp(numel(unique(nowModel{w}.segMap)));
+
+        % Reset warnings
+    end
 return
 % problem remain here about index
 function [D ObjModel] = RefitObj(D,ObjModel,R,imout,d_step,SEI,P)

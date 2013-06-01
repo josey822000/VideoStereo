@@ -25,13 +25,7 @@ planar = size(vals.SEI, 1) == 3;
 oobv = cast(-1000, class(vals.R));
 out_unlabel = vals.improve(end) < 0;
 
-% Calculate the homogenous coordinates of our two labellings
-X = repmat(1:sp(2), [sp(1) 1]);
-Y = repmat((1:sp(1))', [1 sp(2)]); % Faster than meshgrid
-%                 X   Y   1   D1
-%  WC =  
-%                 X   Y   1   D2
-clear X Y
+
 seg1 = D1_Obj.segMap;
 seg2 = D2_Obj.segMap;
 MDLaux = numel(unique(seg1)) + numel(unique(seg2));

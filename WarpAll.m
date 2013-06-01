@@ -28,7 +28,7 @@ function WarpedInfo = WarpAll( Key, KeyP)
 
             epl_pts = ( tmp_mat * (Kf\(pts')) + repmat(Key{i}.D(:)',[3 1]) .* tmp_vec )';
             epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
-            [WarpedInfo{i,j}.F WarpedInfo{i,j}.segMap WarpedInfo{i,j}.D] = GetWarpNoFillHole(Key{i}.Model.F,Key{i}.Model.segMap,Key{i}.D,epl_pts(:,1)-0.5,epl_pts(:,2)-0.5);
+            [WarpedInfo{i,j}.F WarpedInfo{i,j}.segMap WarpedInfo{i,j}.D] = GetWarp(Key{i}.Model.F,Key{i}.Model.segMap,Key{i}.D,epl_pts(:,1)-0.5,epl_pts(:,2)-0.5);
             
         end
     end

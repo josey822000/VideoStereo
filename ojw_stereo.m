@@ -520,10 +520,21 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         KeyP.R = P.R(:,:,options.KeyFrame);
         KeyP.T = P.T(:,options.KeyFrame);
         WarpedInfo = WarpAll(Key,KeyP);
-        LittleWindowModel = TrackingBased(Key,KeyP,[300 185],8,[30 30],WarpedInfo);
+        [LittleWindowModel I R Pts]= TrackingBased(Key,KeyP,[192 78],4,[30 30],WarpedInfo,images(options.KeyFrame));
         % doing fusion , can it combine??
         KeyVals = vals;
         KeyVals.P = KeyP;
+        KeyVals.R = R;
+        KeyVals.visibility = false;
+        KeyVals.I = I;
+        KeyVals.Pts = Pts;
+        clear I R Pts
+        T = reshape(uint32(1:numel(LittleWindowModel{1}{1}.D)), size(LittleWindowModel{1}{1}.D));
+        % Use 2nd order smoothness prior
+        SEI = [reshape(T(1:end-1,:), 1, []) reshape(T(:,1:end-1), 1, []); ...
+           reshape(T(2:end,:), 1, []) reshape(T(:,2:end), 1, [])];
+        KeyVals.SEI = SEI;
+        clear SEI
         ObjTube = TrackingFusion(KeyVals,LittleWindowModel,options);
         % update region
         for i=1:size(Key)

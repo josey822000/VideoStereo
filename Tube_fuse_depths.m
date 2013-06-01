@@ -4,10 +4,16 @@ function [N info energy V] = Tube_fuse_depths(nowModel, newModel, vals, options)
 % $Id: ibr_fuse_depths.m,v 1.3 2008/11/17 11:27:35 ojw Exp $
 t_start = cputime;
 nowD = [];
+newD = [];
+segMap = [];
 for i=1:size(nowModel,1)
     nowD = [ nowD  nowModel{i}.D];
+    newD = [ newD  newModel{i}.D];
+    segMap = [segMap [nowModel{i}.segMap; newModel{i}.segMap]];
 end
-figure(2);imshow(nowD/vals.disps(1));
+figure(2);imshow([nowD ; newD]/vals.disps(1));
+figure(3);sc(segMap,'rand');
+clear nowD newD
 % figure(3);imshow(D2/vals.disps(1));
 % figure(4);sc(D1_Obj.segMap,'rand');
 % figure(5);sc(D2_Obj.segMap,'rand');
@@ -18,9 +24,9 @@ lambdaOcoh = 25;
 lambdaDcoh = 25;
 lambdaColor = 4;
 lambdaParallax = 2;
-lambdaMDL = 100000;
-lambdaInf = 1000000;
-
+lambdaMDL = 10000;
+lambdaInf = 100000;
+num_in= 1;
 % Initialize values
 Kinf = int32(0);
 occl_cost = cast(1000000,class(Kinf));
@@ -29,7 +35,6 @@ info.timings = zeros(3, 1, numel(vals.improve));
 info.numbers = zeros(4, 1, numel(vals.improve), 'uint32');
 energy = zeros(1, numel(vals.improve));
 %vals.I = images(2:end);
-num_in = numel(vals.I);
 % tube sz
 tubeSz = size(nowModel,1);
 % image sz
@@ -37,24 +42,14 @@ sp = size(nowModel{1}.D);
 % pixel num
 tp = numel(nowModel{1}.D);
 planar = size(vals.SEI, 1) == 3;
-oobv = cast(-1000, class(vals.R));
+oobv = cast(-1000, class(vals.R{1}));
 out_unlabel = vals.improve(end) < 0;
 
-% Calculate the homogenous coordinates of our two labellings
-X = repmat(1:sp(2), [sp(1) 1]);
-Y = repmat((1:sp(1))', [1 sp(2)]); % Faster than meshgrid
-%                 X   Y   1   D1
-%  WC =  
-%                 X   Y   1   D2
-clear X Y
-seg1 = D1_Obj.segMap;
-seg2 = D2_Obj.segMap;
-MDLaux = numel(unique(seg1)) + numel(unique(seg2));
 % Initialise arrays for the data terms
 if vals.visibility
-    EI = reshape(repmat(uint32(tp+(0:num_in-1)*2*tp), [2*tp 1]), 1, []);
-    EI = [repmat(uint32(1:tp), [1 2*num_in]); EI+repmat(uint32(1:2*tp), [1 num_in])];
-    E = repmat(cat(3, [occl_cost 0 0 0], [0 0 occl_cost 0]), [tp 1 1 num_in]);
+    EI = reshape(repmat(uint32(tp*tubeSz), [2*tp*tubeSz 1]), 1, []);
+    EI = [repmat(uint32(1:tp*tubeSz), [1 2]); EI+repmat(uint32(1:2*tp*tubeSz), [1 1])];
+    E = repmat(cat(3, [occl_cost 0 0 0], [0 0 occl_cost 0]), [tp*tubeSz 1 1 1]);
 else
     % Data edges are not needed
     EI = zeros(2, 0, 'uint32');
@@ -67,52 +62,44 @@ end
 U = zeros(tp*tubeSz, 2, class(Kinf));
 TEI = zeros(2, 0, 'uint32');
 TE = zeros(4, 0, class(Kinf));
+%
 
-% For each input image...
-
-[X Y] = meshgrid(1:sp(2), 1:sp(1));
-pts = ones(sz(1)*sz(2), 3);
-pts(:,1) = X(:);
-pts(:,2) = Y(:);
 P = vals.P;
-Kf = P.K(:,:,1);
-Rf = P.R(:,:,1);
-Tf = P.T(:,1);
-refIdx = 2:num_in+1;
-refIdx(end) = num_in-1;
-%{
-nodes size : windowsz * tubesz
-neighbor : a little SEI, can be construct outside or inside
-for every window in tube
-    calc the GMM cost
-    calc the parallax cost
-    calc ocoh
-    calc pcoh
-end
-solve
-%}
-for a = 1:tubesz
-    % Calculate the coordinates in the input image
-    %{
-    K2 = P.K(:,:,a+1);
-    R2 = P.R(:,:,a+1);
-    T2 = P.T(:,a+1);
+pts = vals.Pts;
+% For each input image...
+D1 = [];
+D2 = [];
+uniqueElement = zeros(2,1);
+uniqueObj1 = [];
+uniqueObj2 = [];
+PcCost = [];
+PGmm = [];
+Ppar = [];
+for w=1:size(newModel,1)
+    D1 = [D1 nowModel{w}.D];
+    D2 = [D2 newModel{w}.D];
+    % ref P
+    Kf = P.K(:,:,w);
+    Rf = P.R(:,:,w);
+    Tf = P.T(:,w);
+    % match P
+    if w == size(newModel,1)
+        m = w-1;
+    else
+        m = w+1;
+    end
+    K2 = P.K(:,:,m);
+    R2 = P.R(:,:,m);
+    T2 = P.T(:,m);
     tmp_mat = K2 * R2' * Rf;
     tmp_vec = K2 * R2' * ( Tf - T2);
-    tmp_vec = repmat(tmp_vec, [1 prod(sz)]);
-    epl_pts1 = ( tmp_mat * (Kf\(pts(:,:)')) + repmat(D1(:)',[3 1]) .* tmp_vec )';
+    tmp_vec = repmat(tmp_vec, [1 prod(sp)]);
+    epl_pts1 = ( tmp_mat * (Kf\(pts{w}')) + repmat(nowModel{w}.D(:)',[3 1]) .* tmp_vec )';
     epl_pts1 = epl_pts1 ./ repmat(epl_pts1(:,3),[1 3]);
-    epl_pts2 = ( tmp_mat * (Kf\(pts(:,:)')) + repmat(D2(:)',[3 1]) .* tmp_vec )';
+    epl_pts2 = ( tmp_mat * (Kf\(pts{w}')) + repmat(newModel{w}.D(:)',[3 1]) .* tmp_vec )';
     epl_pts2 = epl_pts2 ./ repmat(epl_pts2(:,3),[1 3]);
-    %}
-    % Epc
-    % D1,D2
-%     [mpD1 mpD2 Check1 Check2 outB1 outB2] = warp2DepthConsiderNoise(D1,D2,D1_Obj,D2_Obj,D1_Obj.otherView{a},D2_Obj.otherView{a},epl_pts1,epl_pts2);
-%     figure(6);
-%     imshow(Check1);
-%     figure(7);
-%     imshow(Check2);
-    %{
+    [mpD1 mpD2 Check1 Check2 outB1 outB2] = warp2DepthConsiderNoise(D1,D2,D1_Obj,D2_Obj,D1_Obj.otherView{a},D2_Obj.otherView{a},epl_pts1,epl_pts2);
+
     Check = [reshape(Check1,[],1); reshape(Check2,[],1)] ;
     
     Dp = [reshape(D1,[],1) ; reshape(D2,[],1)];
@@ -124,139 +111,84 @@ for a = 1:tubesz
     occ = nCheck | [outB1(:) ; outB2(:)];
     epl_pts = [epl_pts1 ; epl_pts2];
     clear epl_pts1 epl_pts2
-    M = vgg_interp2(vals.I{a}, epl_pts(:,1), epl_pts(:,2), 'linear', oobv);
-    M = squeeze(M) - vals.R;
+    M = vgg_interp2(vals.I{m}, epl_pts(:,1), epl_pts(:,2), 'linear', oobv);
+    M = squeeze(M) - vals.R{w};
     M = vals.ephoto(M);
-    M(M>lambdaOcc-1) = lambdaOcc-1;
-    CheckDisRange = [reshape(D1>=0 & D1<=vals.d_step,[],1); reshape(D2>=0 & D2<=vals.d_step,[],1)];
-    occ = occ & CheckDisRange;
-    Check = Check & CheckDisRange;
-    %}
-%     figure(8);imshow(reshape(occ(1:end/2).*lambdaOcc+Check1(:).*M(1:end/2),size(Check1))/max(max(M(1:end/2))));
-%     figure(9);imshow(reshape(occ(end/2+1:end).*lambdaOcc+Check2(:).*M(end/2+1:end),size(Check1))/max(max(M(end/2+1:end))));
-%     Epc = reshape((occ.*lambdaOcc + Check.*M) + (~(occ|Check))*1000000, tp, 2);
-%     figure(10);
-%     imshow(reshape(~(occ(1:end/2)|Check(1:end/2)),size(Check1)));
-%     figure(11);
-%     imshow(reshape(~(occ(end/2+1:end)|Check(end/2+1:end)),size(Check1)));
-%     clear M N Check V1 V2 occ ObjCheck DepCheck CheckDisRange
-    % Obj Color term
-    Ecol = reshape(lambdaColor*-GMM(vals.R,D1_Obj.segMap,D2_Obj.segMap,D1_Obj.GMM_Name,D2_Obj.GMM_Name,D1_Obj.table,D2_Obj.table),tp,2);
-    
-    % Obj parallax
-    Epar = reshape(lambdaParallax*(1-ParallaxModel(D1,D2,D1_Obj,D2_Obj,vals.d_step,vals.ndisps,D1_Obj.table,D2_Obj.table,P)),tp,2);
-    IA = cast((Epc + Ecol+ Epar)/num_in ,class(Kinf));
-    clear Epc Ecol Epar
-
-
-    % Find interactions
-    epl_pts(:,3) = epl_pts(:,3)./[D1(:); D2(:)];
-    [T M] = sortrows(epl_pts);
-    N = find_interactions(T, 0.5); % Optimized version
-    N = M(N); % Unsort
-    N = uint32(N(:,abs(diff(N))~=tp)); % Remove interactions between the same node
-
-    % Add the pixel interactions to the graph
-    M = N(1,:) > tp;
-    
-    %N(2,N(2,:)>tp) = N(2,N(2,:)>tp) + MDLaux;
-%     TEI = [TEI [N(1,:)-uint32(tp*M); uint32(tp*2*a-tp)+MDLaux+N(2,:)]];
-    TEI = [TEI [N(1,:)-uint32(tp*M); uint32(tp*2*a-tp)+N(2,:)]];
-    T = zeros(4, numel(M));
-    T(2,~M) = Kinf;
-    T(4,M) = Kinf;
-    TE = [TE T];
-
+%     figure(8);imshow(reshape(M(1:end/2),sp)/max(max(M(1:end/2))));
+%     figure(9);imshow(reshape(M(end/2+1:end),sp)/max(max(M(end/2+1:end))));
+    PcCost = [PcCost [reshape(M(1:end/2),sp(1),[]) ; reshape(M(end/2+1:end),sp(1),[])]];
+    Epc = reshape(M, tp, 2);
+    % calc GMM
+    Ecol = reshape(lambdaColor*-GMM(vals.R{w},nowModel{w}.segMap,newModel{w}.segMap,nowModel{w}.GMM_Name,newModel{w}.GMM_Name,nowModel{w}.table,newModel{w}.table),tp,2);
+    PGmm = [PGmm [reshape(Ecol(1:end/2),sp(1),[]) ; reshape(Ecol(end/2+1:end),sp(1),[])]];
+    % calc parallax
+    Epar = reshape(lambdaParallax*(1-ParallaxModel(nowModel{w}.D,newModel{w}.D,nowModel{w},newModel{w},vals.d_step,vals.ndisps,nowModel{w}.table,newModel{w}.table)),tp,2);
+    Ppar = [Ppar [reshape(Epar(1:end/2),sp(1),[]) ; reshape(Epar(end/2+1:end),sp(1),[])]];
+    % data term
+    IA = cast((Epc + Ecol+ Epar) ,class(Kinf));
     if vals.visibility
         % not used
         % Set up photoconsistency edges
-        E(:,2,1,a) = IA(:,1);
-        E(:,4,2,a) = IA(:,2);
-        
-        if vals.compress_graph
-            % Determine the photoconsistency nodes which have no interactions
-            M = ones(tp, 2, class(Kinf));
-            M(N(2,:)) = 0;
-
-            % Add those photoconsistency terms to the unaries
-            U = U + M .* IA;
-        end
+        E(1+(w-1)*tp:w*tp,2,1,1) = IA(:,1);
+        E(1+(w-1)*tp:w*tp,4,2,1) = IA(:,2);
     else
         % Add the photoconsistency terms to the unaries
-        U = U + IA;
+        U(1+(w-1)*tp:w*tp,:) = U(1+(w-1)*tp:w*tp,:) + IA;
     end
-    clear T M N
+    uniqueElement = uniqueElement + [numel(unique(nowModel{w}.segMap)); numel(unique(newModel{w}.segMap))];
+    uniqueObj1 = [uniqueObj1 ; unique(nowModel{w}.segMap)];
+    uniqueObj2 = [uniqueObj2 ; unique(newModel{w}.segMap)];
 end
-clear WC IA
+figure(4); imshow(PcCost/25);
+figure(5); imshow(PGmm/25);
+figure(6); imshow(Ppar/2);
+uniqueObj1 = unique(uniqueObj1);
+uniqueObj2 = unique(uniqueObj2);
 
 EI_ = EI;
 if vals.visibility
-    % not used this part cause in our code visibility is false
+    % reshape to 4*tp
     E = reshape(permute(E, [2 1 3 4]), 4, []);
-    if vals.compress_graph
-        % The unary and pairwise energies as they stand are entirely
-        % correct, i.e. will give the correct labelling. However, it can be
-        % compressed into a smaller but equivalent graph, which will be
-        % faster to solve, by removing superfluous nodes and edges.
-        [U EI EI_ E N T] = compress_graph(U', EI, E, TEI, TE, tp, num_in);
-    else
-        %
-        U = zeros(2, tp+tp*2*num_in, class(Kinf));
-        T = TE;
-        N = TEI;
-    end
-    % Concatenate data and visibility edges
-    E = [E T];
-    EI_ = [EI_ N];
-    clear T N
+    U = zeros(2, tp*tubeSz+tp*tubeSz*2, class(Kinf));
 else
     U = U';
 end
-TE = TE(2,:) ~= 0;
-info.timings(1,:) = cputime - t_start; % Time data term evaluation
-% ====================%
-% smooth term
-% ====================%
-% Map = logical([ones(1,size(vals.SEI,2)); zeros(2,size(vals.SEI,2)); ones(1,size(vals.SEI,2))])' ; 
-% Map = permute(Map,[3 2 1]);
-% Eoc
-Oc = [reshape(D1_Obj.segMap,1,[]) ; reshape(D2_Obj.segMap,1,[])];
-Oc = reshape(Oc(:,vals.SEI),4,[]);
-Oc = (diff(int32(reshape(Oc([1 3; 1 4; 2 3; 2 4]',:), 2, 4, [])))~=0);
-% Oc = lambdaOcoh*Oc + 1.*~Oc;
-Oc = lambdaOcoh*Oc;
-% Oc = Oc .* Map;
-Eoc = reshape(cast(Oc, class(E)), [], size(vals.SEI, 2)); 
-% Edc
-Dc = [reshape(D1_Obj.F,1,[]) ; reshape(D2_Obj.F,1,[])];
-Dc = reshape(Dc(:,vals.SEI),4,[]);
-Dc = diff(int32(reshape(Dc([1 3; 1 4; 2 3; 2 4]',:), 2, 4, [])))~=0;
-EqObjNeqDep = ~Oc & Dc;
-% EqObjNeqDep = EqObjNeqDep & Map;
+SE = [];
+for w=1:size(newModel,1)
+    % calc ocoh
+    Oc = [reshape(nowModel{w}.segMap,1,[]) ; reshape(newModel{w}.segMap,1,[])];
+    Oc = reshape(Oc(:,vals.SEI),4,[]);
+    Oc = (diff(int32(reshape(Oc([1 3; 1 4; 2 3; 2 4]',:), 2, 4, [])))~=0);
+    Oc = lambdaOcoh*Oc;
+    Eoc = reshape(cast(Oc, class(E)), [], size(vals.SEI, 2)); 
+    % calc pcoh
+    Dc = [reshape(nowModel{w}.F,1,[]) ; reshape(newModel{w}.F,1,[])];
+    Dc = reshape(Dc(:,vals.SEI),4,[]);
+    Dc = diff(int32(reshape(Dc([1 3; 1 4; 2 3; 2 4]',:), 2, 4, [])))~=0;
+    EqObjNeqDep = ~Oc & Dc;
 
-calcDeptDis = [reshape(D1,1,[]) ; reshape(D2,1,[])];
-calcDeptDis = reshape(calcDeptDis(:,vals.SEI),4,[]);
-calcDeptDis = abs(diff(reshape(calcDeptDis([1 3; 1 4; 2 3; 2 4]',:), 2, 4, [])));
-% Edc = (lambdaDcoh/2)*(calcDeptDis<=1 & EqObjNeqDep) + lambdaDcoh*(calcDeptDis>1 & EqObjNeqDep) + 1.*~EqObjNeqDep;
-Edc = (lambdaDcoh/2)*(calcDeptDis<=1 & EqObjNeqDep) + lambdaDcoh*(calcDeptDis>1 & EqObjNeqDep);
-Edc = reshape(cast(Edc, class(E)), [], size(vals.SEI, 2));
-SE = Eoc + Edc;
-% SE = ones(4,size(vals.SEI,2),'int32');
-clear Eoc Edc Map Oc Dc calcDeptDis 
-%
+    calcDeptDis = [reshape(nowModel{w}.D,1,[]) ; reshape(newModel{w}.D,1,[])];
+    calcDeptDis = reshape(calcDeptDis(:,vals.SEI),4,[]);
+    calcDeptDis = abs(diff(reshape(calcDeptDis([1 3; 1 4; 2 3; 2 4]',:), 2, 4, [])));
+    Edc = (lambdaDcoh/2)*(calcDeptDis<=1 & EqObjNeqDep) + lambdaDcoh*(calcDeptDis>1 & EqObjNeqDep);
+    Edc = reshape(cast(Edc, class(E)), [], size(vals.SEI, 2));
+    SE = [SE Eoc + Edc];
+    
+    
+    EI_ = [EI_ vals.SEI+tp*(w-1)];
 
-if ~planar
-    E = [E SE];
-    EI_ = [EI_ vals.SEI];
 end
+E = [E SE];
+MDLaux = numel(uniqueObj1)+numel(uniqueObj2);
 if vals.visibility
-    [tmpE tmpEI tmpU] = GenClique(seg1,seg2,tp,num_in,MDLaux,lambdaMDL);
+    [tmpE tmpEI tmpU] = GenClique(nowModel,newModel,tp,num_in,tubeSz,uniqueObj1,uniqueObj2,lambdaMDL);
 else
-    [tmpE tmpEI tmpU] = GenClique(seg1,seg2,tp,0,MDLaux,lambdaMDL);
+    [tmpE tmpEI tmpU] = GenClique(nowModel,newModel,tp,0,tubeSz,uniqueObj1,uniqueObj2,lambdaMDL);
 end
 E = [E tmpE];
 EI_ = [EI_ tmpEI];
-U = [U zeros(2,MDLaux,'int32')]+tmpU;
+U = [U zeros(2,numel(uniqueObj1)+numel(uniqueObj2),'int32')]+tmpU;
+info.timings(1,:) = cputime - t_start; % Time data term evaluation
 
 clear tmpE tmpEI tmpU
 info.timings(2,:) = cputime - t_start; % Time smoothness term evaluation
@@ -264,17 +196,15 @@ figure(1);
 for a = 1:numel(vals.improve)
     t_start = cputime;
     % Fuse the two labellings, using contract and/or improve if desired
-    qpbo_params = int32([tp ((vals.improve(a)==1)+(vals.improve(a)==4)*2) vals.contract(a) vals.contract(a)>0]);
+    qpbo_params = int32([tp*tubeSz + MDLaux ((vals.improve(a)==1)+(vals.improve(a)==4)*2) vals.contract(a) vals.contract(a)>0]);
     if vals.improve(a) == 4
         % Add callback function handle
         qpbo_params = {qpbo_params, @(L) (choose_labels(L, U, E, EI, SE, vals.SEI, TE, TEI, num_in, vals.visibility, 2, vals.independent) > 0)};
     end
     try
-        if planar
-            [M stats] = vgg_qpbo(U, EI_, E, vals.SEI, SE, qpbo_params);
-        else
-            [M stats] = vgg_qpbo(U, EI_, E, qpbo_params);
-        end
+        % planar == false
+        [M stats] = vgg_qpbo(U, EI_, E, qpbo_params);
+        
     catch
         % Error probably due to probe failure
         stats = [0 0 Inf];
@@ -293,9 +223,8 @@ for a = 1:numel(vals.improve)
         N = M > 0;
     elseif nargout > 2 || vals.show_output
         N = M > 0;
-        [U_ E_ SE_ V] = calc_vis_energy(N, U, E(:,1:size(EI, 2)), EI, SE, vals.SEI, TE, TEI, num_in);
-        
-        
+        [U_ E_ SE_ V] = calc_vis_energy(N, U, E(:,1:size(EI, 2)), EI, SE, vals.SEI, TE, TEI, num_in,MDLaux);
+        M = M(1:end-MDLaux);
         energy(a) = sum(U_) + sum(E_) + sum(SE_);
     end
     info.numbers(1,a) = sum(N);
@@ -305,21 +234,24 @@ clear TEI TE U E SE EI_
 
 if nargout > 3 || vals.show_output
     % Generate output visibilities
-    T = (tp * N) + (1:tp)';
+    T = (tp* tubeSz* N(1:end-MDLaux)) + (1:tp*tubeSz)';
     for b = 1:num_in
-        V(1:tp,b) = V(T);
-        T = T + 2*tp;
+        V(1:tp*tubeSz,b) = V(T);
+        T = T + 2*tp*tubeSz;
     end
-    V(tp+1:end,:) = [];
+    V(tp*tubeSz+1:end,:) = [];
 end
 
 if vals.show_output
     % Display the output figures
-    U_ = double(U_) + accum(EI(1,:)', E_, [tp 1]);
-    U_ = reshape(U_, sp(1), sp(2));
+    N = N(1:end-MDLaux);
+    MDLU = U_(end-MDLaux+1:end);
+    U_ = U_(1:end-MDLaux);
+    U_ = double(U_) + accum(EI(1,:)', E_, [tp*tubeSz 1]);
+    U_ = reshape(U_, sp(1), sp(2)*tubeSz);
     if vals.visibility
         % Take off the occlusion costs and normalize
-        EI = reshape(sum(V(1:tp,:), 2), sp(1), sp(2));
+        EI = reshape(sum(V(1:tp*tubeSz,:), 2), sp(1), sp(2)*tubeSz);
         U_ = U_ - (num_in - EI) * double(occl_cost);
         E_ = EI ~= 0;
         U_(E_) = U_(E_) ./ EI(E_);
@@ -331,22 +263,23 @@ if vals.show_output
     sc(D1, 'contrast', vals.d_min+[0 vals.d_step]);
     subplot('Position', [2/3 0.5 1/3 0.5]);
     disp(['U:' num2str(sum(sum(U_)))]);    
+    disp(['MDLU:' num2str(sum(MDLU))]);
     sc(U_, 'jet');
     subplot('Position', [0 0 1/3 0.5]);
-    T = reshape(sc(reshape(M, sp(1), sp(2)), 'prism'), [], 3);
+    T = reshape(sc(reshape(M, sp(1), sp(2)*tubeSz), 'prism'), [], 3);
     I = M < 0;
     T(I,:) = 1 - (1 - T(I,:)) * 0.3; % Lighten unlabelled pixels set to 0
     I = M > 1;
     T(I,:) = T(I,:) .* 0.3; % Darken unlabelled pixels set to 1 by optimal splice
     T(M==0,:) = 1;
     T(M==1,:) = 0;
-    sc(reshape(T, sp(1), sp(2), 3), [0 1]);
+    sc(reshape(T, sp(1), sp(2)*tubeSz, 3), [0 1]);
     subplot('Position', [1/3 0 1/3 0.5]);
-    sc(reshape(sum(V, 2), sp(1), sp(2)), [0 num_in], 'contrast');
+    sc(reshape(sum(V, 2), sp(1), sp(2)*tubeSz), [0 num_in], 'contrast');
     subplot('Position', [2/3 0 1/3 0.5]);
-    U_ = -accum(vals.SEI(2,:)', SE_, [tp 1]);
+    U_ = -accum(vals.SEI(2,:)', SE_, [tp*tubeSz 1]);
     disp(['E:' num2str(sum(sum(U_)))]);    
-    sc(reshape(U_, sp(1), sp(2)));
+    sc(reshape(U_, sp(1), sp(2)*tubeSz));
     drawnow;
 end
 if out_unlabel
@@ -444,11 +377,11 @@ else
 end
 return
 
-function [U E SE V] = calc_vis_energy(L, U, E, EI, SE, SEI, TE, TEI, num_in)
+function [U E SE V] = calc_vis_energy(L, U, E, EI, SE, SEI, TE, TEI, num_in,MDLaux)
 % Generate visibility maps
 tp = numel(L);
-V = true(2*tp, num_in);
-V(TEI(2,L(TEI(1,:))~=TE')-tp) = false;
+V = true(2*(tp-MDLaux), num_in);
+% V(TEI(2,L(TEI(1,:))~=TE')-tp) = false;
 
 % Calculate energies
 U = U((0:tp-1)'*2+L+1);
@@ -505,15 +438,12 @@ catch
     end
 end
 return
-function outval = ParallaxModel(D1,D2,ObjModel1,ObjModel2,d_step,ndisps,D1_table,D2_table,P)
+function outval = ParallaxModel(D1,D2,ObjModel1,ObjModel2,d_step,ndisps,D1_table,D2_table)
     sz = size(D1);
     [X Y] = meshgrid(1:sz(2), 1:sz(1));
     probMap1 = zeros(sz);
     probMap2 = zeros(sz);
-    
-    Kf = P.K(:,:,1);
-    Rf = P.R(:,:,1);
-    Tf = P.T(:,1);
+
     
     ObjIds = unique(ObjModel1.segMap);
     for i= 1:numel(ObjIds)
@@ -550,30 +480,35 @@ return
 
 
 function [outval] = GMM(R,ObjMap1,ObjMap2,ModelName1,ModelName2,D1_table,D2_table)
-    halfR = R(1:end/2,:);
-    probMap1 = zeros(size(halfR,1),1);
-    probMap2 = zeros(size(halfR,1),1);
+    R = R(1:end/2,:);
+    probMap1 = zeros(size(R,1),1);
+    probMap2 = zeros(size(R,1),1);
     ObjIds = unique(ObjMap1);
     for i= 1:numel(ObjIds)
         s = ObjIds(i);
-        samples = halfR(ObjMap1==s,:);
+        samples = R(ObjMap1==s,:);
         prob = PredictGMM(samples',ModelName1{D1_table(s)});
         probMap1(ObjMap1==s) = prob;
     end
     ObjIds = unique(ObjMap2);
     for i= 1:numel(ObjIds)
         s = ObjIds(i);
-        samples = halfR(ObjMap2==s,:);
+        samples = R(ObjMap2==s,:);
         prob = PredictGMM(samples',ModelName2{D2_table(s)});
         probMap2(ObjMap2==s) = prob;
     end
     
     outval = [reshape(probMap1,[],1) ; reshape(probMap2,[],1)];
+%     outval = outval - max(outval);
+%     outval(outval<-20) = -20;
     middleV = mean(outval(1:end/2));
+%     disp(['GMM mean obj1:' num2str(middleV)])
     outval(outval >= middleV) = middleV;
     outval = outval-middleV;
-%     figure(12); imshow(reshape(abs(outval(1:end/2))/6,size(ObjMap2)));
-%     figure(13); imshow(reshape(abs(outval(end/2+1:end))/6,size(ObjMap2)));
+    outval(outval < -100) = -100;
+    outval = outval/100;
+%     figure(13); imshow(reshape(abs(outval(1:end/2))/6,size(ObjMap2)));
+%     figure(14); imshow(reshape(abs(outval(end/2+1:end))/6,size(ObjMap2)));
 return
 function B = num_first(A)
 % Return:        A  if numel(A) == 1
@@ -583,30 +518,34 @@ if B == -1
     B = A;
 end
 return
-function [tmpE tmpEI tmpU] = GenClique(seg1,seg2,tp,num_in,MDLaux,lambdaMDL)
-tmpU = zeros(2,tp+tp*2*num_in+MDLaux,'int32');
+function [tmpE tmpEI tmpU] = GenClique(nowModel,newModel,tp,num_in,tubeSz,uniqueObj1,uniqueObj2,lambdaMDL)
+% if visibility , here have to change index
+MDLaux = numel(uniqueObj1) + numel(uniqueObj2);
+tmpU = zeros(2,tp*tubeSz+MDLaux,'int32');
 tmpE = zeros(4,0,'int32');
 tmpEI = zeros(2,0,'uint32');
-tp2num_in = tp+2*tp*num_in;
-ObjIds = unique(seg1);
-segNum1 = numel(ObjIds);
-for i= 1:segNum1
-    s = ObjIds(i);
-    index = find(seg1==s);
-    index(:,2) = tp2num_in+i;
-    tmpEI = [tmpEI  index' ];
+
+for w= 1:size(nowModel,1)
+    ObjIds = unique(nowModel{w}.segMap);
+    segNum1 = numel(ObjIds);
+    for i= 1:segNum1
+        s = ObjIds(i);
+        index = tp*(w-1) + find(nowModel{w}.segMap==s);
+        index(:,2) = tp*tubeSz+i;
+        tmpEI = [tmpEI  index' ];
+    end
+    tmpE = [tmpE [ones(1,tp,'int32')*lambdaMDL; zeros(3,tp,'int32')]];
+    
+    ObjIds = unique(newModel{w}.segMap);
+    for i= 1:numel(ObjIds)
+        s = ObjIds(i);
+        index = tp*(w-1) + find(newModel{w}.segMap==s);
+        index(:,2) = tp*tubeSz+numel(uniqueObj1)+i;
+        tmpEI = [tmpEI  index' ];
+    end
+    tmpE = [tmpE [ zeros(3,tp,'int32'); ones(1,tp,'int32')*lambdaMDL]];
+    
 end
-newInSeg1 = tp;
-tmpE = [ones(1,newInSeg1,'int32')*lambdaMDL; zeros(3,newInSeg1,'int32')];
-tmpU(2,tp2num_in+1:tp2num_in+segNum1)  = lambdaMDL;
-ObjIds = unique(seg2);
-for i= 1:numel(ObjIds)
-    s = ObjIds(i);
-    index = find(seg2==s);
-    index(:,2) = tp2num_in+segNum1+i;
-    tmpEI = [tmpEI  index' ];
-end
-newInSeg2 = tp;
-tmpE = [tmpE [ zeros(3,newInSeg2,'int32'); ones(1,newInSeg2,'int32')*lambdaMDL]];
-tmpU(1,tp2num_in+segNum1+1:end) = lambdaMDL;
+tmpU(2,tp*tubeSz+1:tp*tubeSz+numel(uniqueObj1))  = lambdaMDL;
+tmpU(1,tp*tubeSz+numel(uniqueObj1)+1:end) = lambdaMDL;
 return
