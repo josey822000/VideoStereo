@@ -545,7 +545,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         Key = cell(size(options.KeyFrame));
         TotalFNum = 0;
         TotalONum = 0;
-        for k=1:size(options.KeyFrame)
+        for k=1:size(options.KeyFrame,2)
             options.PATH = ['key/' sprintf('%02d',k)];
             options.current = options.KeyFrame(k);
             mkdir(options.PATH);
@@ -564,7 +564,18 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
                 Key{k}.plane = plane;
                 clear D F plane
             end
-            [Key{k}.plane Key{k}.F] = UnifyLocal(Key{k}.D,Key{k}.plane,Key{k}.F,options.step);
+            if ~exist(fullfile(options.PATH,'UnifyLocal.mat'))
+                [Key{k}.plane Key{k}.F] = UnifyLocal(Key{k}.D,Key{k}.plane,Key{k}.F,options.step);
+                tmpKey = Key{k};
+                save(fullfile(options.PATH,'UnifyLocal.mat'),'-struct','tmpKey','plane','F');
+                clear tmpKey;
+            else
+                load(fullfile(options.PATH,'UnifyLocal.mat'));
+                Key{k}.F = F;
+                Key{k}.plane = plane;
+                clear F plane
+            end
+            continue;
             % initial object maps and planes for key
             [X Y] = meshgrid(1:sz(2),1:sz(1));
             if ~exist(fullfile(options.PATH,'segpln_Obj.mat'))

@@ -13,36 +13,48 @@ function [plane F] = UnifyLocal( D, pln, F, threshold)
 
     DF = zeros(sz(1:2));
     % combine inside k
+    Fnum = 0;
+    plane = [];
     for k=1:sz(3)
-        % from depth plane
-        Fk = F(:,:,k);
-        Fid = unique(Fk);
-        Fid = Fid(Fid>1);
-        Ftable = 1:numel(Fid);
-        plane = pln{k};
-        Dk = D(:,:,k);
-        % calc difference between planes
-        for i=1:numel(Fid)
-            if Ftable(i) ~= i
-                continue;
-            end
-            N = plane(  Fid(i),:);
-            DF = -( X * N(1) + Y * N(2) + N(3));
-            DiffOfKandRef = abs(DF - Dk);
-            for j=i+1:numel(Fid)
-                M = Fk == Fid(j);
-                % assign to a bigger seg number
-                if max(DiffOfKandRef(M)) < threshold
-                    Ftable(j) = i;
-                    Fk(M) = i;
-                end
-            end
-        end
-        Ftable(unique(Ftable)) = 1:numel(unique(Ftable));
-        disp([num2str(k) 'map:' num2str(numel(Fid)) '->' num2str(numel(unique(Ftable)))]);
-        F(:,:,k) = Ftalbe(Fk);
+        F(:,:,k) = F(:,:,k) + Fnum;
+        plane = [plane ;pln{k}];
+        Fnum = max(reshape(F(:,:,k),1,[]));
     end
+    
+    % from depth plane
+    Fid = unique(F);
+    Ftable = 1:numel(Fid);
+    
+    % calc difference between planes
+    for i=1:numel(Fid)
+        if Ftable(i) ~= i
+            continue;
+        end
+        N = plane(  Fid(i),:);
+        DF = -( X * N(1) + Y * N(2) + N(3));
+        samePln = [];
+        for k=1:sz(3)
+            Fk = F(:,:,k);
+            Dk = D(:,:,k);
+            DiffOfKandRef = abs(DF - Dk);
+            % find not same set
+            samePln = [samePln ;unique(Fk(DiffOfKandRef >= threshold))];
+        end
+        % find diff set
+        samePln = setdiff(1:numel(Fid),samePln);
+        samePln = samePln(samePln>i);
+        Ftable(samePln) = i;
+        F(ismember(F,samePln)) = i;       
+    end
+    figure(2);
+    sc(Fk,'rand');
+    saveas(2,[num2str(k) '.jpg']);
+    Ftable(unique(Ftable)) = 1:numel(unique(Ftable));
+    disp([num2str(k) 'map:' num2str(numel(Fid)) '->' num2str(numel(unique(Ftable)))]);
+    F = Ftable(F);
+    
     % combine between k
+    
 end
 
 function [D ObjModel] = RefitObj(D,ObjModel,R,imout,d_step,SEI,P)
