@@ -545,37 +545,59 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         Key = cell(size(options.KeyFrame));
         TotalFNum = 0;
         TotalONum = 0;
+        if ~exist(fullfile('key','UnifyGlobal.mat'))
+            for k=1:size(options.KeyFrame,2)
+                options.PATH = ['key/' sprintf('%02d',k)];
+                options.current = options.KeyFrame(k);
+                mkdir(options.PATH);
+                if ~exist(fullfile(options.PATH,'segpln.mat'))
+                    R = images{options.KeyFrame(k)};
+                    [Key{k}.D info.segpln_gen] = ojw_segpln(images, P, disps, R, options);
+                    Key{k}.plane = info.segpln_gen.plane;
+                    Key{k}.F = info.segpln_gen.segments;
+                    tmpKey = Key{k};
+                    save(fullfile(options.PATH,'segpln.mat'),'-struct','tmpKey','plane','F','D');
+                    clear tmpKey
+                else
+                    load(fullfile(options.PATH,'segpln.mat'));
+                    Key{k}.D = D;
+                    Key{k}.F = F;
+                    Key{k}.plane = plane;
+                    clear D F plane
+                end
+                if ~exist(fullfile(options.PATH,'UnifyLocal.mat'))
+                    [Key{k}.plane Key{k}.F] = UnifyLocal(Key{k}.D,Key{k}.plane,Key{k}.F,options.step);
+                    tmpKey = Key{k};
+                    save(fullfile(options.PATH,'UnifyLocal.mat'),'-struct','tmpKey','plane','F');
+                    clear tmpKey;
+                else
+                    load(fullfile(options.PATH,'UnifyLocal.mat'));
+                    Key{k}.F = F;
+                    Key{k}.plane = plane;
+                    clear F plane
+                end
+                if ~exist(fullfile(options.PATH,'InitObject.mat'))
+                    figure(5);imshow(images{options.current});
+                    
+                    [Key{k}.segMap Key{k}.ObjPln] = GCO(Key{k},vals);
+                    tmpKey = Key{k};
+                    save(fullfile(options.PATH,'InitObject.mat'),'-struct','tmpKey','segMap','ObjPln');
+                    clear tmpKey;
+                else
+                    load(fullfile(options.PATH,'InitObject.mat'));
+                    Key{k}.segMap = segMap;
+                    Key{k}.ObjPln = ObjPln;
+                    clear segMap ObjPln;
+                end
+            end
+            % global unify
+            Key = UnifyGlobal(Key,P,floor(size(Key,1)/2),options.step);
+            save(fullfile('key','UnifyGlobal.mat'),'Key');
+        else
+            load(fullfile('key','UnifyGlobal.mat'));
+        end
+        
         for k=1:size(options.KeyFrame,2)
-            options.PATH = ['key/' sprintf('%02d',k)];
-            options.current = options.KeyFrame(k);
-            mkdir(options.PATH);
-            if ~exist(fullfile(options.PATH,'segpln.mat'))
-                R = images{options.KeyFrame(k)};
-                [Key{k}.D info.segpln_gen] = ojw_segpln(images, P, disps, R, options);
-                Key{k}.plane = info.segpln_gen.plane;
-                Key{k}.F = info.segpln_gen.segments;
-                tmpKey = Key{k};
-                save(fullfile(options.PATH,'segpln.mat'),'-struct','tmpKey','plane','F','D');
-                clear tmpKey
-            else
-                load(fullfile(options.PATH,'segpln.mat'));
-                Key{k}.D = D;
-                Key{k}.F = F;
-                Key{k}.plane = plane;
-                clear D F plane
-            end
-            if ~exist(fullfile(options.PATH,'UnifyLocal.mat'))
-                [Key{k}.plane Key{k}.F] = UnifyLocal(Key{k}.D,Key{k}.plane,Key{k}.F,options.step);
-                tmpKey = Key{k};
-                save(fullfile(options.PATH,'UnifyLocal.mat'),'-struct','tmpKey','plane','F');
-                clear tmpKey;
-            else
-                load(fullfile(options.PATH,'UnifyLocal.mat'));
-                Key{k}.F = F;
-                Key{k}.plane = plane;
-                clear F plane
-            end
-            continue;
             % initial object maps and planes for key
             [X Y] = meshgrid(1:sz(2),1:sz(1));
             if ~exist(fullfile(options.PATH,'segpln_Obj.mat'))
@@ -692,6 +714,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
                 info.segpln_Obj = tmp.tmp;
                 clear tmp
             end
+            
         end
         % unify segments
         

@@ -46,10 +46,8 @@ function [plane F] = UnifyLocal( D, pln, F, threshold)
         Ftable(samePln) = i;
         F(ismember(F,samePln)) = i;       
     end
-    figure(2);
-    sc(Fk,'rand');
-    saveas(2,[num2str(k) '.jpg']);
     Ftable(unique(Ftable)) = 1:numel(unique(Ftable));
+    plane = plane(unique(Ftable),:);
     disp([num2str(k) 'map:' num2str(numel(Fid)) '->' num2str(numel(unique(Ftable)))]);
     F = Ftable(F);
     
