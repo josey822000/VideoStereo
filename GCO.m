@@ -19,16 +19,17 @@ function [segMap ObjPln] = GCO( Key, vals )
         segNum = max(segment(:));
         h = GCO_Create(segNum,segNum);
         % set data term
-        data = zeros(segNum,segNum);
+        data = zeros(segNum,segNum,'int32');
         for sid = 1:segNum %row
             N = plane(sid,:)';
             planeD = -(X * N(1) + Y * N(2) + N(3));
             planeD(planeD < vals.d_min) = -vals.d_step;
             planeD(planeD > vals.d_min+vals.d_step) = 2*vals.d_step;
-            planeDiff = abs(planeD(:)-reshape(Key.D(:,:,i),[],1))/vals.d_step;
+            planeDiff = abs(planeD(:)-reshape(Key.D(:,:,i),[],1))/vals.step;
             data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)';
         end
         clear planeD planeDiff mapp
+        disp(['data0:' num2str(nnz(data==0))]);
         tmp = int32(segment(vals.SEI));
         % depth diff on boundary
         DiffObjIdx = repmat(any(diff(int32(segment(vals.SEI))),1), [2 1]);
@@ -67,7 +68,7 @@ function [segMap ObjPln] = GCO( Key, vals )
         Smooth = double(Smooth>0);
         Smooth = zeros(segNum,segNum);
         clear tmp Neigh List ColorD SmoothNormalize
-        data = int32(data);
+        
         GCO_SetDataCost(h,data);
         GCO_SetNeighbors(h,Smooth);
         GCO_Expansion(h);

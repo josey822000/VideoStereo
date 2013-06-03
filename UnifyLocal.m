@@ -5,9 +5,6 @@ function [plane F] = UnifyLocal( D, pln, F, threshold)
     
     sz = size(F);
     [X Y] = meshgrid(1:sz(2), 1:sz(1));
-    pts = ones(sz(1)*sz(2), 3);
-	pts(:,1) = X(:);
-	pts(:,2) = Y(:);
     
     
 
@@ -46,8 +43,8 @@ function [plane F] = UnifyLocal( D, pln, F, threshold)
         Ftable(samePln) = i;
         F(ismember(F,samePln)) = i;       
     end
-    Ftable(unique(Ftable)) = 1:numel(unique(Ftable));
     plane = plane(unique(Ftable),:);
+    Ftable(unique(Ftable)) = 1:numel(unique(Ftable));
     disp([num2str(k) 'map:' num2str(numel(Fid)) '->' num2str(numel(unique(Ftable)))]);
     F = Ftable(F);
     

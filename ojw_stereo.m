@@ -543,6 +543,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
     case 'ALL'
         % take segments for key
         Key = cell(size(options.KeyFrame));
+        vals.step = options.step;
         TotalFNum = 0;
         TotalONum = 0;
         if ~exist(fullfile('key','UnifyGlobal.mat'))
