@@ -580,7 +580,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
                 if ~exist(fullfile(options.PATH,'InitObject.mat'))
                     figure(5);imshow(images{options.current});
                     
-                    [Key{k}.segMap Key{k}.ObjPln] = GCO(Key{k},vals);
+                    [Key{k}.segMap Key{k}.ObjPln] = GCO(Key{k},images{options.current},vals);
                     tmpKey = Key{k};
                     save(fullfile(options.PATH,'InitObject.mat'),'-struct','tmpKey','segMap','ObjPln');
                     clear tmpKey;
@@ -601,120 +601,6 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         for k=1:size(options.KeyFrame,2)
             % initial object maps and planes for key
             [X Y] = meshgrid(1:sz(2),1:sz(1));
-            if ~exist(fullfile(options.PATH,'segpln_Obj.mat'))
-                plane = Key{k}.plane;
-                Key{k}.segMap = zeros(size(Key{k}.F),'int32');
-                Key{k}.ObjPln = cell(size(Key{k}.F,3),1);
-                localFNum = 0;
-                localONum = 0;
-                % for proposal, do depth segmentation
-                for i = 1:size(Key{k}.D,3)
-                    %update segMap(object map) and plane to global numbers
-                        segment = Key{k}.F(:,:,i);
-                        
-                        segNum = max(max(segment));
-                        h = GCO_Create(segNum,segNum);
-                        % set data term
-                        data = zeros(segNum,segNum, 'int32');
-                        for sid = 1:segNum %row
-                            N = plane{i}(sid,:)';
-                            planeD = -(X * N(1) + Y * N(2) + N(3));
-                            planeD(planeD < vals.d_min) = -2*vals.d_step;
-                            planeD(planeD > vals.d_min+vals.d_step) = 2*vals.d_step;
-                            planeDiff = abs(planeD(:)-reshape(Key{k}.D(:,:,i),[],1))/vals.d_step;
-                            data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)';
-                        end
-                        clear planeD planeDiff mapp
-                        tmp = int32(segment(vals.SEI));
-                        % depth diff on boundary
-                        DiffObjIdx = repmat(any(diff(int32(segment(vals.SEI))),1), [2 1]);
-                        Neigh = reshape(tmp(DiffObjIdx),2,[]);
-                %       % depth difference on smooth term
-                %       tmpD = Dproposals(:,:,i);
-                %       tmpD = tmpD(vals.SEI);
-                %       tmpD = abs(diff(reshape(tmpD(DiffObjIdx),2,[])));
-                %       tmpD = repmat(tmpD,[1 2]);
-                %       % color difference on smooth term
-            %             meanColor4eachSeg = accumarray(reshape(segment,[],1),ColorD(:,1));
-            %             meanColor4eachSeg(:,2) = accumarray(reshape(segment,[],1),ColorD(:,2));
-            %             meanColor4eachSeg(:,3) = accumarray(reshape(segment,[],1),ColorD(:,3));
-            %             ColorD = meanColor4eachSeg ./ repmat(histc(segment(:),1:max(segment(:))),[1 3]);
-                        clear DiffObjIdx meanColor4eachSeg
-                        List = (Neigh(1,:)-1)*int32(segNum)+Neigh(2,:);
-                        List = [List (Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)];
-
-            %             ColorMap = zeros(segNum,segNum,'int32');
-            %             ColorMap((Neigh(1,:)-1)*int32(segNum)+Neigh(2,:)) = sum((ColorD(Neigh(1,:),:) - ColorD(Neigh(2,:),:)).^2,2);
-            %             ColorMap((Neigh(2,:)-1)*int32(segNum)+Neigh(1,:)) = sum((ColorD(Neigh(2,:),:) - ColorD(Neigh(1,:),:)).^2,2);
-            %             clear ColorD
-            %             ColorMap = ColorMap/(30*3);
-                        % boundary length
-                        pixNumInSeg = histc(segment(:),1:segNum);
-                        pixNumInSeg = repmat(pixNumInSeg,[1 segNum]) + repmat(pixNumInSeg',[segNum 1]);
-                        Smooth = zeros(1,segNum*segNum, 'int32');
-                        Smooth = histc(List,1:segNum*segNum);
-                        pixNumInSeg = pixNumInSeg(:) .* (Smooth(:)>0);
-                        pixNumInSeg = 9000/pixNumInSeg(:);
-                        Smooth = ceil(Smooth*0.025);
-    %                     Smooth = ceil(Smooth.*pixNumInSeg);
-                        Smooth = reshape(Smooth,[segNum segNum]);
-                        Smooth(isnan(Smooth))=0;
-
-
-                        clear tmp Neigh List ColorD SmoothNormalize
-                        GCO_SetDataCost(h,data);
-                        GCO_SetNeighbors(h,Smooth);
-                        GCO_Expansion(h);
-                        Label = GCO_GetLabeling(h);
-                        GCO_Delete(h);
-                        % after relabel
-                        uq = unique(Label);
-                        NewSegNum = numel(uq);
-                        segment = Label(segment);
-                        %---- store segment plane for each object (object plane) for later use 
-                        % info.obj_pln{i} = plane{i}(segment, :);
-                        %----------------------------------------------%
-
-                        tmpL = 1:segNum;
-                        tmpL(uq) = 1:NewSegNum;
-                        segment = tmpL(segment);
-                        Key{k}.segMap(:,:,i) = segment;
-                        Key{k}.Objpln = plane{i}(uq,:);
-                        
-                        fprintf('solving GCO for proposal %d\n', i);
-
-                        clear segment tmpL
-                        clear data smooth
-                        
-                        info.segpln_Obj{i}.F = info.segpln_Obj{i}.F + FsegNum;
-                        info.segpln_Obj{i}.segMap = info.segpln_Obj{i}.segMap + OsegNum;
-                        FsegNum = max(max(info.segpln_Obj{i}.F));
-                        OsegNum = max(max(info.segpln_Obj{i}.segMap));
-
-                        %warp to other view
-                        %info.segpln_Obj{i}.otherView = ObjWarp(Dproposals(:,:,i),info.segpln_Obj{i}.F,info.segpln_Obj{i}.segMap,P);           
-                        %calc Model            
-                        ExpFuse = 0;
-                        %[info.segpln_Obj{i}.plane info.segpln_Obj{i}.parallax info.segpln_Obj{i}.GMM_Name] = calcObjModel(disps,Dproposals(:,:,i),info.segpln_Obj{i},images{1},i,ExpFuse);                        
-                end
-                % update table
-                OsegNum = max(info.segpln_Obj{14}.segMap(:));
-                for i = 1:size(Dproposals,3)
-                    table = zeros(OsegNum,1,'uint32');
-                    table(unique(info.segpln_Obj{i}.segMap)) = 1:numel(unique(info.segpln_Obj{i}.segMap));
-                    info.segpln_Obj{i}.table = table;
-                end
-
-                % started to fuse proposals
-                tmp = info.segpln_Obj;
-                delete('segpln_Obj.mat');
-                save('segpln_Obj','tmp');
-                clear R tmp
-            else  % load segplnObj
-                tmp = load('segpln_Obj');
-                info.segpln_Obj = tmp.tmp;
-                clear tmp
-            end
             
         end
         % unify segments
