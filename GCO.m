@@ -27,7 +27,7 @@ function [segMap ObjPln] = GCO( Key, img, vals )
         % set data term
         data = zeros(segNum,segNum,'int32');
         segCnt = histc(segment(:),1:segNum)';
-        ColorList = zeros(segNum,3);
+        %ColorList = zeros(segNum,3);
         recoverImg = zeros([prod(sz(1:2)) 3]);
         recoverD = zeros(sz(1:2));
         for sid = 1:segNum
@@ -44,9 +44,9 @@ function [segMap ObjPln] = GCO( Key, img, vals )
             planeD(planeD > vals.d_min+vals.d_step) = 2*vals.d_step;
             planeDiff = abs(planeD(:)-reshape(Key.D(:,:,i),[],1))/vals.step;
             data(sid,:) = accumarray(reshape(segment,[],1),planeDiff)'./segCnt;
-            ColorList(sid,:) = sum(img(segment(:) == sid,:));
+            %ColorList(sid,:) = sum(img(segment(:) == sid,:));
         end
-        
+        %{
         % color
         ColorList = ColorList./repmat(segCnt(:),[1 3]);
         
@@ -58,6 +58,7 @@ function [segMap ObjPln] = GCO( Key, img, vals )
         imshow(recoverImg);
         ColorList = repmat(ColorList,[segNum 1]) - reshape(repmat(ColorList',[segNum 1]),3,[])';
         ColorList = sum(ColorList.^2,2) ;
+        %}
         clear planeD planeDiff mapp
         disp(['data0:' num2str(nnz(data==0))]);
         tmp = int32(segment(vals.SEI));
@@ -95,18 +96,18 @@ function [segMap ObjPln] = GCO( Key, img, vals )
         % after relabel
         uq = unique(Label);
         NewSegNum = numel(uq);
-        tmpSegment = Label(segment);
+        segment = Label(segment);
         %---- store segment plane for each object (object plane) for later use 
         % info.obj_pln{i} = plane{i}(segment, :);
         %----------------------------------------------%
         disp(['newseg:' num2str(NewSegNum)]);
         tmpL = 1:segNum;
         tmpL(uq) = 1:NewSegNum;
-        tmpSegment = tmpL(tmpSegment);
+        segment = tmpL(segment);
         segMap(:,:,i) = segment;
-        Objpln{i} = FitPlane(segment,Key.D(:,:,i));
+        ObjPln{i} = FitPlane(segment,Key.D(:,:,i));
         figure(3);
-        sc(tmpSegment,'rand');
+        sc(segment,'rand');
         disp(['solving GCO for proposal' num2str(i)]);
         
         clear segment tmpL
