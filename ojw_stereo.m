@@ -581,6 +581,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
                     figure(5);imshow(images{options.current});
                     
                     [Key{k}.segMap Key{k}.ObjPln] = GCO(Key{k},images{options.current},vals);
+                    [Key{k}.ObjPln Key{k}.segMap] = UnifyLocal(Key{k}.D,Key{k}.ObjPln,Key{k}.segMap,options.step);
                     tmpKey = Key{k};
                     save(fullfile(options.PATH,'InitObject.mat'),'-struct','tmpKey','segMap','ObjPln');
                     clear tmpKey;
