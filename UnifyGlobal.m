@@ -1,12 +1,20 @@
-function Key = UnifyGlobal( Key,P , ref, threshold)
+function Key = UnifyGlobal( Key,P , ref, FThr, ObjThr)
 %UNIFYUSINGTHR Summary of this function goes here
 %   Detailed explanation goes here
+    ObjOffset = zeros(size(Key,1)+1,1);
+    FOffset = zeros(size(Key,1)+1,1);
     ONum = 0;
     FNum = 0;
     for k=1:size(Key,1)
-        ONum = ONum + max(Key{k}.segMap(:));
-        FNum = FNum + max(Key{k}.F(:));
+        ObjOffset(k) = ONum;
+        FOffset(k) = FNum;
+        Key{k}.segMap = Key{k}.segMap + ONum;
+        Key{k}.F = Key{k}.F + FNum;
+        ONum = max(Key{k}.segMap(:));
+        FNum = max(Key{k}.F(:));
     end
+    ObjOffset(end,1) = ONum;
+    FOffset(end,1) = FNum;
     disp(['Object Total Number:' num2str(ONum)]);
     disp(['Depth Total Number:' num2str(FNum)]);
     
@@ -20,104 +28,105 @@ function Key = UnifyGlobal( Key,P , ref, threshold)
 	pts(:,2) = Y(:);
     
     %% project plane to ref frame
-    K2 = P.K(:,:,ref);
-    R2 = P.R(:,:,ref);
-    T2 = P.T(:,ref);
+    
     % object
-    plane = zeros(0,3);
-    GMM_Name = [];
-    parallax = zeros(0,size(Key{ref}.Model.parallax,2));
+    ObPln = zeros(0,3);
     ObjTable = 1:ONum;
     % depth plane
-    depthpln = zeros(0,3);
+    plane = zeros(0,3);
     FTable = 1:FNum;
     DispFromObj = zeros(sz);
-    Oid = unique(Key{ref}.Model.segMap);
-    for i = 1:numel(Oid)
-        M = Key{ref}.Model.segMap == Oid(i);
-        N = Key{ref}.Model.plane(  Key{ref}.Model.table(Oid(i)),:);
-        DispFromObj(M) = -( X(M) * N(1) + Y(M) * N(2) + N(3));
-    end
+    Oid = unique(Key{ref}.segMap);
+    % two neighbor combine
+    
     % combine
     WarpInfo = cell(size(Key));
-    for k=1:size(P.K,3)
+    % init ObjPln 
+    ObPln = Key{1}.ObPln;
+    plane = Key{1}.plane;
+    for k=1:size(Key,1)-1
         % Kf: trans from keyframe, K2: trans to
-        if k == ref
-            plane = [plane ; Key{ref}.Model.plane];
-            GMM_Name = [GMM_Name ; Key{ref}.Model.GMM_Name];
-            parallax = [parallax ; Key{ref}.Model.parallax];
-            depthpln = [depthpln ; Key{ref}.Model.depthpln];
-            continue;
-        end
-        Kf = P.K(:,:,k);
-        Rf = P.R(:,:,k);
-        Tf = P.T(:,k);
-        
-        
+        Kf = P.K(:,:,k+1);
+        Rf = P.R(:,:,k+1);
+        Tf = P.T(:,k);        
+        K2 = P.K(:,:,k);
+        R2 = P.R(:,:,k);
+        T2 = P.T(:,k);
+ 
         tmp_mat = K2 * R2' * Rf;
 		tmp_vec = K2 * R2' * ( Tf - T2);
 		tmp_vec = repmat(tmp_vec, [1 prod(sz)]);
-        epl_pts = ( tmp_mat * (Kf\(pts')) + repmat(Key{k}.D(:)',[3 1]) .* tmp_vec )';
-		epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
-		[WarpInfo{k}.F WarpInfo{k}.segMap] = GetWarp(Key{k}.Model.F,Key{k}.Model.segMap,Key{k}.D,epl_pts(:,1)-0.5,epl_pts(:,2)-0.5);
-        % recover D on ref frame using converted plane parameter
-        DObj = zeros(sz);
-        DF = zeros(sz);
-        plane = [plane ; ((Key{k}.Model.plane * Kf * Rf' * R2)/K2)./repmat(1 + Key{k}.Model.plane * Kf * Rf' * (T2-Tf),[1 3])];
-        depthpln = [depthpln ; ((Key{k}.Model.depthpln * Kf * Rf' * R2)/K2)./repmat(1 + Key{k}.Model.depthpln * Kf * Rf' * (T2-Tf),[1 3])];
         
+        ObjPln = [ObjPln ; ((Key{k+1}.ObPln * Kf * Rf' * R2)/K2)./repmat(1 + Key{k}.ObPln * Kf * Rf' * (T2-Tf),[1 3])];
+        plane = [plane ; ((Key{k+1}.plane * Kf * Rf' * R2)/K2)./repmat(1 + Key{k}.plane * Kf * Rf' * (T2-Tf),[1 3])];
+        
+        % warp info to next frame
+        %{
+        for p = 1:sz(3)
+            epl_pts = ( tmp_mat * (Kf\(pts')) + repmat(Key{k}.D(:,:,p)',[3 1]) .* tmp_vec )';
+            epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
+            [WarpInfo{k}.F WarpInfo{k}.segMap] = GetWarp(Key{k}.F(:,:,p),Key{k}.segMap(:,:,p),Key{k}.D(:,:,p),epl_pts(:,1)-0.5,epl_pts(:,2)-0.5);
+            % recover D on ref frame using converted plane parameter
+            DObj = zeros(sz);
+            DF = zeros(sz);
+            
+        end
+        %}
         % from depth plane
-        Fid = unique(WarpInfo{k}.F);
-        Fid = Fid(Fid>1);
+        K1_FNum = numel(unique(Key{k}.F));
+        K2_FNum = numel(unique(Key{k+1}.F));
+        Fid = unique(Key{k+1}.F);
+        disp(['origin F:' num2str(K1_FNum)]);
+        % calc difference between planes
         for i=1:numel(Fid)
-            M = WarpInfo{k}.F == Fid(i);
-            N = depthpln(  Fid(i),:);
-            DF(M) = -( X(M) * N(1) + Y(M) * N(2) + N(3));
-        end
-        WarpInfo{k}.D = DF;
-        DiffOfKandRef = abs(DF - Key{ref}.D);
-        for i=1:numel(Fid)
-            M = WarpInfo{k}.F == Fid(i);
-            refID = unique(Key{ref}.Model.F(M));
-            meanVal = ones(numel(refID),1);
-            for j=1:numel(refID)
-                boolMap = M & (Key{ref}.Model.F == refID(j));
-                if mean(DiffOfKandRef(boolMap)) < threshold
-                    meanVal(j) = 1/nnz(boolMap);
-                end
-            end
-            [val idx] = min(meanVal);
-            if val< threshold
-                FTable(Fid(i)) = refID(idx);
-%                 fprintf('%d -> %d \n',Fid(i),refID(idx));
+            N = plane(  Fid(i),:);
+            DF = -( X * N(1) + Y * N(2) + N(3));
+            samePln = [];
+            DiffOfKandRef = abs(repmat(DF,[1 1 sz(3)]) - Key{k}.D);
+            % find not same set
+            samePln = unique(Key{k}.F(DiffOfKandRef >= FThr));
+            
+            % find diff set
+            samePln = setdiff(FOffset(k)+(1:K1_FNum),samePln);
+            FTable(samePln) = Fid(i);
+            for k2=1:k
+                Key{k2}.F(ismember(Key{k2}.F,samePln)) = Fid(i);
             end
         end
+        disp(['Unify F:' num2str(numel(unique(Key{k}.F)))]);
+        
         % from object plane
-        Oid = unique(WarpInfo{k}.segMap);
-        Oid = Oid(Oid>1);
+        K1_ONum = numel(unique(Key{k}.segMap));
+        K2_ONum = numel(unique(Key{k+1}.segMap));
+        Oid = unique(Key{k+1}.segMap);
+        
+        disp(['origin Obj:' num2str(K1_ONum)]);
+        % calc difference between planes
         for i=1:numel(Oid)
-            M = WarpInfo{k}.segMap == Oid(i);
-            N = plane(  Oid(i),:);
-            DObj(M) = -( X(M) * N(1) + Y(M) * N(2) + N(3));
-        end
-        DiffOfKandRef = abs(DObj - DispFromObj);
-        for i=1:numel(Oid)
-            M = WarpInfo{k}.segMap == Oid(i);
-            refID = unique(Key{ref}.Model.segMap(M));
-            for j=1:numel(refID)
-                if mean(DiffOfKandRef(M & (Key{ref}.Model.segMap == refID(j)))) < threshold
-                    ObjTable(Oid(i)) = refID(j);
-%                     fprintf('%d -> %d \n',Oid(i),refID(j));
-                end
+            N = ObjPln(  Oid(i),:);
+            DF = -( X * N(1) + Y * N(2) + N(3));
+            samePln = [];
+            DiffOfKandRef = abs(repmat(DF,[1 1 sz(3)]) - Key{k}.D);
+            % find not same set
+            samePln = unique(Key{k}.segMap(DiffOfKandRef >= ObjThr));
+            
+            % find diff set
+            samePln = setdiff(ObjOffset(k)+(1:K1_ONum),samePln);
+            ObjTable(samePln) = Oid(i);
+            for k2=1:k
+                Key{k2}.segMap(ismember(Key{k2}.segMap,samePln)) = Oid(i);
             end
         end
-        % rebuild F and segMap
-        Key{k}.Model.F = FTable(Key{k}.Model.F);
-        Key{k}.Model.segMap = ObjTable(Key{k}.Model.segMap);
-        Key{k}.Model.table(ObjTable(Key{k}.Model.table>0)) = Key{k}.Model.table(Key{k}.Model.table>0);
+        disp(['Unify Obj:' num2str(numel(unique(Key{k}.segMap)))]);
         
     end
-
+    % according the sort, adjust plane sort
+    for k=1:size(Key,1)
+        [x y] = sort(FTable((FOffset(k)+1):FOffset(k+1)));
+        Key{k}.plane = Key{k}.plane(y,:);
+        [x y] = sort(ObjTable((ObjOffset(k)+1):ObjOffset(k+1)));
+        Key{k}.ObjPln = Key{k}.ObjPln(y,:);
+    end
 end
 
 function [D ObjModel] = RefitObj(D,ObjModel,R,imout,d_step,SEI,P)
