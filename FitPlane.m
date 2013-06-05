@@ -21,7 +21,6 @@ WC(:,1) = WC(:,3) .* X(:);
 
 WC(:,3) = 1 ./ D(:);
 rt = 0.1;
-dataCnt = 0;
 for i=1:segNum
     % Choose a segment
     s = ObjIds(i);
@@ -34,10 +33,9 @@ for i=1:segNum
     else
         continue;
     end
-    dataCnt = dataCnt + 1;
     % Find least squares plane from inliers
     N = N \ repmat(-1, [size(N, 1) 1]);
-    plane(dataCnt,:) = N;
+    plane(i,:) = N;
 end
 % Reset warnings
 warning(warning_state);

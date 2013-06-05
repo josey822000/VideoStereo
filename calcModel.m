@@ -32,7 +32,7 @@ for k=1:sz(3)
     Proposals{k}.D = Key.D(:,:,k);
     Proposals{k}.parallax = zeros(segNum,ceil((2*numel(disps)+1)/2));
     Proposals{k}.GMM_Name = cell(segNum,1);
-    Proposals{k}.ObjPln = FitPlane(Key.D(:,:,k),Key.segMap(:,:,k));
+    Proposals{k}.ObjPln = FitPlane(Key.segMap(:,:,k),Key.D(:,:,k));
 	for i=1:segNum
 		% Choose a segment
 		s = ObjIds(i);
