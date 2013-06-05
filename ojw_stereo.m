@@ -599,12 +599,16 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
             load(fullfile('key','UnifyGlobal.mat'));
         end
         
+        Proposal = cell(size(options.KeyFrame,2),1);
         for k=1:size(options.KeyFrame,2)
-            % initial object maps and planes for key
-            [X Y] = meshgrid(1:sz(2),1:sz(1));
-            
+            if ~exist(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'))
+                % initial object maps and planes for key
+                Proposal{k} = calcModel(['GMM/Init_' num2str(options.KeyFrame(k))], disps, Key{k}, images{options.KeyFrame(k)});
+                save(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'));
+            else
+                load(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'));
+            end
         end
-        % unify segments
         
         % solve object of each key
         
