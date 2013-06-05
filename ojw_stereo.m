@@ -603,10 +603,10 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         for k=1:size(options.KeyFrame,2)
             if ~exist(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'))
                 % initial object maps and planes for key
-                Proposal{k} = calcModel(['GMM/Init_' num2str(options.KeyFrame(k))], disps, Key{k}, images{options.KeyFrame(k)});
-                save(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'));
+                Proposal{k} = calcModel(['GMM/Init_' num2str(options.KeyFrame(k)) '_'], disps, Key{k}, images{options.KeyFrame(k)});
+                save(fullfile(['key/' sprintf('%02d',k)],'Proposal.mat'));
             else
-                load(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'));
+                load(fullfile(['key/' sprintf('%02d',k)],'Proposal.mat'));
             end
         end
         
