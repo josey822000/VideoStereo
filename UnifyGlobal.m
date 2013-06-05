@@ -30,7 +30,7 @@ function Key = UnifyGlobal( Key,P , ref, FThr, ObjThr)
     %% project plane to ref frame
     
     % object
-    ObPln = zeros(0,3);
+    ObjPln = zeros(0,3);
     ObjTable = 1:ONum;
     % depth plane
     plane = zeros(0,3);
@@ -42,41 +42,42 @@ function Key = UnifyGlobal( Key,P , ref, FThr, ObjThr)
     % combine
     WarpInfo = cell(size(Key));
     % init ObjPln 
-    ObPln = Key{1}.ObPln;
+    ObjPln = Key{1}.ObjPln;
     plane = Key{1}.plane;
     for k=1:size(Key,1)-1
         % Kf: trans from keyframe, K2: trans to
         Kf = P.K(:,:,k+1);
         Rf = P.R(:,:,k+1);
-        Tf = P.T(:,k);        
+        Tf = P.T(:,k+1);        
         K2 = P.K(:,:,k);
         R2 = P.R(:,:,k);
         T2 = P.T(:,k);
  
         tmp_mat = K2 * R2' * Rf;
 		tmp_vec = K2 * R2' * ( Tf - T2);
-		tmp_vec = repmat(tmp_vec, [1 prod(sz)]);
+		tmp_vec = repmat(tmp_vec, [1 prod(sz(1:2))]);
         
-        ObjPln = [ObjPln ; ((Key{k+1}.ObPln * Kf * Rf' * R2)/K2)./repmat(1 + Key{k}.ObPln * Kf * Rf' * (T2-Tf),[1 3])];
-        plane = [plane ; ((Key{k+1}.plane * Kf * Rf' * R2)/K2)./repmat(1 + Key{k}.plane * Kf * Rf' * (T2-Tf),[1 3])];
+        ObjPln = [ObjPln ; ((Key{k+1}.ObjPln * Kf * Rf' * R2)/K2)./repmat(1 + Key{k+1}.ObjPln * Kf * Rf' * (T2-Tf),[1 3])];
+        plane = [plane ; ((Key{k+1}.plane * Kf * Rf' * R2)/K2)./repmat(1 + Key{k+1}.plane * Kf * Rf' * (T2-Tf),[1 3])];
         
         % warp info to next frame
-        %{
-        for p = 1:sz(3)
-            epl_pts = ( tmp_mat * (Kf\(pts')) + repmat(Key{k}.D(:,:,p)',[3 1]) .* tmp_vec )';
+        
+%         for p = 1:sz(3)
+            epl_pts = ( tmp_mat * (Kf\(pts')) + repmat(reshape(Key{k+1}.D(:,:,3),1,[]),[3 1]) .* tmp_vec )';
             epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
-            [WarpInfo{k}.F WarpInfo{k}.segMap] = GetWarp(Key{k}.F(:,:,p),Key{k}.segMap(:,:,p),Key{k}.D(:,:,p),epl_pts(:,1)-0.5,epl_pts(:,2)-0.5);
+            [a b D] = GetWarp(Key{k+1}.F(:,:,3),Key{k+1}.segMap(:,:,3),Key{k+1}.D(:,:,3),epl_pts(:,1)-0.5,epl_pts(:,2)-0.5);
             % recover D on ref frame using converted plane parameter
-            DObj = zeros(sz);
-            DF = zeros(sz);
+            figure(5); imshow(D/0.0053);
             
-        end
-        %}
+%         end
+        
         % from depth plane
         K1_FNum = numel(unique(Key{k}.F));
         K2_FNum = numel(unique(Key{k+1}.F));
         Fid = unique(Key{k+1}.F);
-        disp(['origin F:' num2str(K1_FNum)]);
+        disp(['origin F:' num2str(K1_FNum+K2_FNum)]);
+        figure(3);
+        sc([Key{k}.F(:,:,2) Key{k+1}.F(:,:,2)],'rand');
         % calc difference between planes
         for i=1:numel(Fid)
             N = plane(  Fid(i),:);
@@ -93,14 +94,14 @@ function Key = UnifyGlobal( Key,P , ref, FThr, ObjThr)
                 Key{k2}.F(ismember(Key{k2}.F,samePln)) = Fid(i);
             end
         end
-        disp(['Unify F:' num2str(numel(unique(Key{k}.F)))]);
-        
+        disp(['Unify F:' num2str(numel(unique(cat(3,Key{k}.F,Key{k+1}.F))))]);
+        sc([Key{k}.F(:,:,2) Key{k+1}.F(:,:,2)],'rand');
         % from object plane
         K1_ONum = numel(unique(Key{k}.segMap));
         K2_ONum = numel(unique(Key{k+1}.segMap));
         Oid = unique(Key{k+1}.segMap);
         
-        disp(['origin Obj:' num2str(K1_ONum)]);
+        disp(['origin Obj:' num2str(K1_ONum+K2_ONum)]);
         % calc difference between planes
         for i=1:numel(Oid)
             N = ObjPln(  Oid(i),:);
@@ -117,7 +118,7 @@ function Key = UnifyGlobal( Key,P , ref, FThr, ObjThr)
                 Key{k2}.segMap(ismember(Key{k2}.segMap,samePln)) = Oid(i);
             end
         end
-        disp(['Unify Obj:' num2str(numel(unique(Key{k}.segMap)))]);
+        disp(['Unify Obj:' num2str(numel(unique(cat(3,Key{k}.segMap,Key{k+1}.segMap))))]);
         
     end
     % according the sort, adjust plane sort

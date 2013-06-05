@@ -593,7 +593,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
                 end
             end
             % global unify
-            Key = UnifyGlobal(Key,P,floor(size(Key,1)/2),options.step);
+            Key = UnifyGlobal(Key,P,floor(size(Key,1)/2),options.step,options.step);
             save(fullfile('key','UnifyGlobal.mat'),'Key');
         else
             load(fullfile('key','UnifyGlobal.mat'));
