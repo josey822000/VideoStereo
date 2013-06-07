@@ -1,4 +1,4 @@
-function [N info energy V] = Fuse_depths(nowModel,newModel, vals, options)
+function [N info energy V] = ExpandFuse_depths(nowModel,newModel, vals, options)
 
 
 % $Id: ibr_fuse_depths.m,v 1.3 2008/11/17 11:27:35 ojw Exp $
@@ -22,7 +22,7 @@ sp = size(nowModel.D);
 % pixel num
 tp = numel(nowModel.D);
 planar = size(vals.SEI, 1) == 3;
-oobv = cast(-1000, class(vals.R));
+oobv = cast(25, class(vals.R));
 out_unlabel = vals.improve(end) < 0;
 
 
@@ -48,11 +48,11 @@ TEI = zeros(2, 0, 'uint32');
 TE = zeros(4, 0, class(Kinf));
 % lambda
 lambdaOcc = 25;
-lambdaOcoh = 25;
-lambdaDcoh = 25;
-lambdaColor = 4;
+lambdaOcoh = 10;
+lambdaDcoh = 10;
+lambdaColor = 0;
 lambdaParallax = 2;
-lambdaMDL = 1000;
+lambdaMDL = 0;
 lambdaInf = 1000000;
 % For each input image...
 sz = size(nowModel.D);
@@ -118,7 +118,7 @@ for a = 1:num_in
     
     % Obj parallax
     Epar = reshape(lambdaParallax*(1-ParallaxModel(nowModel.D,newModel.D,nowModel,newModel,vals.d_step,vals.ndisps,nowModel.table,newModel.table,P)),tp,2);
-    IA = cast((Epc+ Ecol+ Epar) ,class(Kinf));
+    IA = cast((Epc) ,class(Kinf));
     clear Epc Ecol Epar
 
 
@@ -276,7 +276,7 @@ for a = 1:numel(vals.improve)
     info.numbers(1,a) = sum(N);
     info.timings(3,a) = cputime - t_start + info.timings(2,a); % Time optimization
 end
-clear TEI TE U E SE EI_
+clear TEI TE E SE EI_
 
 if nargout > 3 || vals.show_output
     % Generate output visibilities
@@ -326,6 +326,18 @@ if vals.show_output
     U_ = -accum(vals.SEI(2,:)', SE_, [tp 1]);
     disp(['E:' num2str(sum(sum(U_)))]);    
     sc(reshape(U_, sp(1), sp(2)));
+    
+    figure(12);
+    subplot('Position', [1/3 0.5 1/3 0.5]);
+    U = U(:,1:end-MDLaux);
+    U_ = U((0:tp-1)'*2+1);
+    U_ = reshape(U_, sp(1), sp(2));
+    sc(U_, 'jet');
+    
+    subplot('Position', [2/3 0.5 1/3 0.5]);
+    U_ = U((0:tp-1)'*2+2);
+    U_ = reshape(U_, sp(1), sp(2));
+    sc(U_, 'jet');
     drawnow;
 end
 if out_unlabel

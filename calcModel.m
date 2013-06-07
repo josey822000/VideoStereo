@@ -41,13 +41,13 @@ for k=1:sz(3)
 		[Y X] = ind2sub(sz(1:2), findM);
         N = Proposals{k}.ObjPln(i,:);
 		OM = -(X * N(1) + Y * N(2) + N(3));
-		parallax(i,:) = hist(D(M)-OM(:),-disps(1):2*disps(1)/numel(disps):disps(1))/numel(OM);
+		Proposals{k}.parallax(i,:) = hist(D(M)-OM(:),-disps(1):2*disps(1)/numel(disps):disps(1))/numel(OM);
 		
-        GMM_Name{i} = [savePath num2str(k) '_' num2str(i) '.yml'];
+        Proposals{k}.GMM_Name{i} = [savePath num2str(k) '_' num2str(i) '.yml'];
 		
 		Pix = Img(reshape(M,[],1),:);
 	   
-		TrainGMM(Pix',GMM_Name{i});      % element column major
+		TrainGMM(Pix',Proposals{k}.GMM_Name{i});      % element column major
 		
 	end
 end

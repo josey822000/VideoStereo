@@ -1,4 +1,4 @@
-function [D info ObjModel] = Fuse_proposals(vals, Key, options)
+function nowModel = Fuse_proposals(vals, Key, options)
 % $Id: ojw_stereo_optim.m,v 1.2 2008/11/17 11:27:35 ojw Exp $
 
 % Create initial arrays
@@ -26,9 +26,12 @@ while (1-(info.energy(iter,end)/info.energy(iter-options.average_over,end)) > op
     info.timings(1,iter,:) = cputime - t_start; % Time proposal generation
 
     
-    
-    [M stats info.energy(iter,:) V] = Fuse_depths(nowModel,newModel, vals, options);
-    
+    disp(['iter: ' num2str(n)]);
+    if ~vals.Expand;
+        [M stats info.energy(iter,:) V] = Fuse_depths(nowModel,newModel, vals, options);
+    else
+        [M stats info.energy(iter,:) V] = ExpandFuse_depths(nowModel,newModel, vals, options);
+    end
     try
         a = 1;
     catch
@@ -42,19 +45,20 @@ while (1-(info.energy(iter,end)/info.energy(iter-options.average_over,end)) > op
         iter = iter - 1;
         break;
     end
-    fprintf(['iter: ' num2str(n)]);
     
-    [D ObjModel] = RefreshObj(M,D,Dnew,ObjModel,Model{n},R,iter,vals.disps,vals.SEI,permute(vals.P,[2 1 3]));
     
+    nowModel = RefreshObj(M,nowModel,newModel);
+    nowModel.otherView = ObjWarp(nowModel.D,nowModel.F,nowModel.segMap,vals.P);
+    disp(['ObjNum:' num2str(numel(unique(nowModel.segMap)))]);
     % 
     info.map(M) = iter;
     info.timings(2:4,iter,:) = stats.timings + info.timings(1,iter,end);
     info.numbers(:,iter,:) = stats.numbers;
     
     % Record progress of disparity map
-    save_progress(options.save_name, 'info');
+%     save_progress(options.save_name, 'info');
 end
-[D ObjModel] = RefitObj(D,ObjModel,R,options.imout,vals.disps,vals.SEI,permute(vals.P,[2 1 3]));
+% [D ObjModel] = RefitObj(D,ObjModel,R,options.imout,vals.disps,vals.SEI,permute(vals.P,[2 1 3]));
 if nargout > 1
     % Save stats
     info.energy = info.energy(options.average_over+2:iter,:);
@@ -66,35 +70,34 @@ if nargout > 1
 end
 return
 
-function [D ObjModel] = RefreshObj(M,D,Dnew,ObjModel,DnewModel,R,iter,disps,SEI,P)
+function nowModel = RefreshObj(M,nowModel,newModel)
     % Switch off annoying warnings
-    table = zeros(numel(ObjModel.table),1,'uint32');
-    D(M) = Dnew(M);
-    oldNum = numel(unique(ObjModel.segMap(~M)));
-    oldObjId = ObjModel.table(unique(ObjModel.segMap(~M)));
-    table(unique(ObjModel.segMap(~M))) = 1:numel(oldObjId);
-    newObjId = DnewModel.table(unique(DnewModel.segMap(M)));
-    table(unique(DnewModel.segMap(M))) = oldNum+uint32((1:numel(newObjId)));
     
+    table = zeros(numel(nowModel.table),1,'uint32');
+    nowModel.D(M) = newModel.D(M);
+    oldNum = numel(unique(nowModel.segMap(~M)));
+    oldObjId = nowModel.table(unique(nowModel.segMap(~M)));
+    table(unique(nowModel.segMap(~M))) = 1:numel(oldObjId);
+    newObjId = newModel.table(unique(newModel.segMap(M)));
+    table(unique(newModel.segMap(M))) = oldNum+uint32((1:numel(newObjId)));
+
+
+    nowModel.GMM_Name = nowModel.GMM_Name(nowModel.table(unique(nowModel.segMap(~M))));
+    nowModel.GMM_Name = [nowModel.GMM_Name; newModel.GMM_Name(newModel.table(unique(newModel.segMap(M))))];
+
+    nowModel.parallax = nowModel.parallax(nowModel.table(unique(nowModel.segMap(~M))),:);
+    nowModel.parallax = [nowModel.parallax; newModel.parallax(newModel.table(unique(newModel.segMap(M))),:)];
+
+    nowModel.ObjPln = nowModel.ObjPln(nowModel.table(unique(nowModel.segMap(~M))),:);
+    nowModel.ObjPln = [nowModel.ObjPln; newModel.ObjPln(newModel.table(unique(newModel.segMap(M))),:)];
+
+    nowModel.table = table;
+
+    nowModel.segMap(M) = newModel.segMap(M);
+    nowModel.F(M) = newModel.F(M);
+
+
     
-    ObjModel.GMM_Name = ObjModel.GMM_Name(ObjModel.table(unique(ObjModel.segMap(~M))));
-    ObjModel.GMM_Name = [ObjModel.GMM_Name; DnewModel.GMM_Name(DnewModel.table(unique(DnewModel.segMap(M))))];
-    
-    ObjModel.parallax = ObjModel.parallax(ObjModel.table(unique(ObjModel.segMap(~M))),:);
-    ObjModel.parallax = [ObjModel.parallax; DnewModel.parallax(DnewModel.table(unique(DnewModel.segMap(M))),:)];
-    
-    ObjModel.plane = ObjModel.plane(ObjModel.table(unique(ObjModel.segMap(~M))),:);
-    ObjModel.plane = [ObjModel.plane; DnewModel.plane(DnewModel.table(unique(DnewModel.segMap(M))),:)];
-    
-    ObjModel.table = table;
-    
-    ObjModel.segMap(M) = DnewModel.segMap(M);
-    ObjModel.F(M) = DnewModel.F(M);
-	
-    ObjModel.otherView = ObjWarp(D,ObjModel.F,ObjModel.segMap,P);
-    disp(numel(unique(ObjModel.segMap)));
-    
-    % Reset warnings
 return
 % problem remain here about index
 function [D ObjModel] = RefitObj(D,ObjModel,R,imout,d_step,SEI,P)

@@ -601,20 +601,113 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         
         Proposal = cell(size(options.KeyFrame,2),1);
         for k=1:size(options.KeyFrame,2)
-            if ~exist(fullfile('key',num2str(options.KeyFrame(k)),'Proposal.mat'))
+            if ~exist(fullfile(['key/' sprintf('%02d',k)],'Proposal.mat'))
                 % initial object maps and planes for key
                 Proposal{k} = calcModel(['GMM/Init_' num2str(options.KeyFrame(k)) '_'], disps, Key{k}, images{options.KeyFrame(k)});
-                save(fullfile(['key/' sprintf('%02d',k)],'Proposal.mat'));
+                Prop = Proposal{k};
+                save(fullfile(['key/' sprintf('%02d',k)],'Proposal.mat'),'Prop');
+                clear Prop;
             else
                 load(fullfile(['key/' sprintf('%02d',k)],'Proposal.mat'));
+                Proposal{k} = Prop;
+                clear Prop;
             end
         end
         
         % solve object of each key
+        for k=1:size(options.KeyFrame,2)
+            if ~exist(['key/' sprintf('%02d/Key2.mat',k)])
+                useKey = options.KeyFrame(k);
+                if k>1
+                    useKey = [useKey options.KeyFrame(k-1)];
+                end
+                if k<size(options.KeyFrame,2)
+                    useKey = [useKey options.KeyFrame(k+1)];
+                end
+                KeyP.K = P.K(:,:,useKey);
+                KeyP.R = P.R(:,:,useKey);
+                KeyP.T = P.T(:,useKey);
+                KeyVals = vals;
+                KeyVals.P = KeyP;
+                KeyVals.R = repmat(reshape(single(images{useKey(1)}), [], 3), [2 1]);
+                KeyVals.visibility = false;
+                KeyVals.I = images(useKey(2:end));
+                KeyVals.Expand = 0;
+                if ~exist(['key/' sprintf('%02d/Key.mat',k)])
+                    for p=1:size(Proposal{k},1)
+                        Proposal{k}{p}.otherView = ObjWarp(Proposal{k}{p}.D,Proposal{k}{p}.F,Proposal{k}{p}.segMap,KeyP);
+                        Proposal{k}{p}.table = 1:max(Key{k}.segMap(:));
+                        Proposal{k}{p}.table(unique(Key{k}.segMap(:,:,p))) = 1:numel(unique(Key{k}.segMap(:,:,p)));
+                        figure(4);
+                        imshow(Proposal{k}{p}.otherView{1}.Disparity/0.0053);
+                    end
+                    Proposal{k} = Fuse_proposals(KeyVals, Proposal{k}, options);
+                    K = Proposal{k};
+                    save(['key/' sprintf('%02d/Key.mat',k)],'K');
+                    clear K;
+                else
+                    load(['key/' sprintf('%02d/Key.mat',k)]);
+                    Proposal{k} = K;
+                    clear K;
+                end
+%                 Proposal{k} = ExpandProposal(Proposal{k},Key{k}.plane,Key{k}.F);
+%                 for p=1:size(Proposal{k},1)
+%                     Proposal{k}{p}.otherView = ObjWarp(Proposal{k}{p}.D,Proposal{k}{p}.F,Proposal{k}{p}.segMap,KeyP);
+%                     Proposal{k}{p}.table = 1:max(Proposal{k}{p}.segMap(:));
+%                     Proposal{k}{p}.table(unique(Proposal{k}{p}.segMap(:))) = 1:numel(unique(Proposal{k}{p}.segMap(:)));
+%                 end
+%                 KeyVals.Expand = 1;
+%                 KeyVals.visibility = 1;
+%                 options.average_over = size(Proposal{k},1);
+%                 Proposal{k} = Fuse_proposals(KeyVals, Proposal{k}, options);
+%                 K2 = Proposal{k};
+%                 save(['key/' sprintf('%02d/Key2.mat',k)],'K2');
+%                 clear K2;
+            else
+%                 load(['key/' sprintf('%02d/Key2.mat',k)]);
+%                 Proposal{k} = K2;
+%                 clear K2;
+            end
+        end
+        % expand
+        mkdir('middle');
+        InitialByKey2(Proposal,vals,options);
+        for m=15:115
+            if ~exist(['middle/' sprintf('%03d/Key.mat',m)]) && ~ismember(options.KeyFrame,m)
+                mkdir(['middle/' sprintf('%03d/',m)]);
+                tmp1Key = [options.KeyFrame(floor(m/15)+1) m options.KeyFrame(floor(m/15)+2)];
+                KeyP.K = P.K(:,:,useKey);
+                KeyP.R = P.R(:,:,useKey);
+                KeyP.T = P.T(:,useKey);
+                KeyVals = vals;
+                KeyVals.P = KeyP;
+                KeyVals.R = repmat(reshape(single(images{useKey(1)}), [], 3), [2 1]);
+                KeyVals.visibility = false;
+                KeyVals.I = images(useKey(2:end));
+                KeyVals.Expand = 0;
+                ObjWarp(Proposal{k}.D,Proposal{k}.F,Proposal{k}.segMap,KeyP);
+                useKey = options.KeyFrame(k);
+                if k>1
+                    useKey = [useKey options.KeyFrame(k-1)];
+                end
+                if k<size(options.KeyFrame,2)
+                    useKey = [useKey options.KeyFrame(k+1)];
+                end
+                KeyP.K = P.K(:,:,useKey);
+                KeyP.R = P.R(:,:,useKey);
+                KeyP.T = P.T(:,useKey);
+                KeyVals = vals;
+                KeyVals.P = KeyP;
+                KeyVals.R = repmat(reshape(single(images{useKey(1)}), [], 3), [2 1]);
+                KeyVals.visibility = false;
+                KeyVals.I = images(useKey(2:end));
+                KeyVals.Expand = 0;
+        end
         
         % propagate to middle frames
         
         
+        end
     end
 else
     sprintf('dont go here');

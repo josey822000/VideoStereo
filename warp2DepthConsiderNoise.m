@@ -11,18 +11,19 @@ function [outD1 outD2 Check1 Check2 outBound1 outBound2] = warp2DepthConsiderNoi
 
     % Look up the colours
     warpX1 = ceil(X1(:,1));
-    warpY1 = ceil(X1(:,2));
+    warpY1 = round(X1(:,2));
     outBound1 = warpX1 <1 | warpX1 > size(Depth1,2) | warpY1 <1 | warpY1 > size(Depth1,1);
+   
     warpX1(warpX1<1 | warpX1 > size(Depth1,2)) = round(X(warpX1<1 | warpX1 > size(Depth1,2)));
     warpY1(warpY1<1 | warpY1 > size(Depth1,1)) = round(Y(warpY1<1 | warpY1 > size(Depth1,1)));
-
+    
     outD1 = otherView1.Disparity(warpY1+size(Depth1,1)*(warpX1-1));
     mpSeg1_1 = reshape(otherView1.segMap(warpY1+size(Depth1,1)*(warpX1-1)), size(Depth1));
 
     warpX1_1 = warpX1-1;
     warpX1_1(warpX1_1<1) = 1;
     mpSeg1_2 = reshape(otherView1.segMap(warpY1+size(Depth1,1)*(warpX1_1-1)), size(Depth1));
-    CheckObj1 = mpSeg1_1 == Obj1.segMap | mpSeg1_2 == Obj1.segMap ;
+    CheckObj1 = mpSeg1_1 == Obj1.segMap | mpSeg1_2 == Obj1.segMap;
 %     figure(6);
 %     imshow(CheckObj1);
     clear mpSeg1_1 mpSeg1_2 
@@ -35,7 +36,7 @@ function [outD1 outD2 Check1 Check2 outBound1 outBound2] = warp2DepthConsiderNoi
 
     % Look up the colours
     warpX2 = ceil(X2(:,1));
-    warpY2 = ceil(X2(:,2));
+    warpY2 = round(X2(:,2));
     outBound2 = warpX2 <1 | warpX2 > size(Depth2,2) | warpY2 < 1 | warpY2 > size(Depth2,1);
     warpX2(warpX2<1 | warpX2 > size(Depth2,2)) = round(X(warpX2<1 | warpX2 > size(Depth2,2)));
     warpY2(warpY2<1 | warpY2 > size(Depth2,1)) = round(Y(warpY2<1 | warpY2 > size(Depth2,1)));
