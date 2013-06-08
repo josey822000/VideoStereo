@@ -673,7 +673,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         mkdir('middle');
         InitialByKey2(Proposal,vals,options);
         for m=15:115
-            if ~exist(['middle/' sprintf('%03d/Key.mat',m)]) && ~ismember(options.KeyFrame,m)
+            if ~exist(['middle/' sprintf('%03d/Key.mat',m)]) && ~any(options.KeyFrame == m)
                 mkdir(['middle/' sprintf('%03d/',m)]);
                 tmp1Key = [options.KeyFrame(floor(m/15)+1) m options.KeyFrame(floor(m/15)+2)];
                 KeyP.K = P.K(:,:,useKey);
