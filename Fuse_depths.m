@@ -100,8 +100,7 @@ for a = 1:num_in
     clear epl_pts1 epl_pts2
     M = vgg_interp2(vals.I{a}, epl_pts(:,1), epl_pts(:,2), 'linear', oobv);
     M = squeeze(M) - vals.R;
-    M = vals.ephoto(M);
-    M(M>lambdaOcc-1) = lambdaOcc-1;
+    M = (lambdaOcc-1)*(1-30/(vals.ephoto(M)+30));
     CheckDisRange = [reshape(nowModel.D>=0 & nowModel.D<=vals.d_step,[],1); reshape(newModel.D>=0 & newModel.D<=vals.d_step,[],1)];
     occ = occ & CheckDisRange;
     Check = Check & CheckDisRange;
