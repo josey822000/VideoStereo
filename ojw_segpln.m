@@ -10,7 +10,7 @@ if numel(sz) < 3
 end
 ephoto = @(F) log(2) - log(exp(sum((F-reshape(double(R), [], sz(3))) .^ 2, 2)*(-1/(options.col_thresh*sz(3))))+1);
 R = uint8(R);
-[X Y] = meshgrid(1:sz(2), 1:sz(1));
+[X Y] = meshgrid(0:sz(2)-1, 0:sz(1)-1);
 pts = ones(sz(1)*sz(2), 3);
 pts(:,1) = X(:);
 pts(:,2) = Y(:);
@@ -45,6 +45,7 @@ switch options.act
             for b = 1:numel(disps)
                 epl_pts(:, :) = ( tmp_mat * (Kf\(pts(:,:)')) + disps(b) * tmp_vec )';
                 epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
+                epl_pts(:,1:2) = epl_pts(:,1:2) +1;
                 % Look up the colours
                 Y = squeeze(vgg_interp2(images{a}, epl_pts(:,1), epl_pts(:,2), 'linear', -1000));
                 % Calculate the RSSD
