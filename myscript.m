@@ -24,7 +24,7 @@ options.imout = 1; % Index of projection matrix to use for output
 % NewRoad test
 options.nclosest = 1:105;
 % options.nclosest = [15 1 30];
-options.KeyFrame = [1 15 30 45 60 75 90 105];
+options.KeyFrame = [1 15 30 45 60 75];
 % cones [3 7]
 % tsukuba [1 4]
 % venus [3 7]
