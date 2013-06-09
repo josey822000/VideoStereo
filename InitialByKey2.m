@@ -46,6 +46,7 @@ function [ output_args ] = InitialByKey2( Key, vals, options)
             tmp_vec = repmat(tmp_vec, [1 prod(sz)]);
             epl_pts = ( tmp_mat * (Kf\(pts')) + repmat(Key{k}.D(:)',[3 1]) .* tmp_vec )';
             epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
+            epl_pts(:,1:2) = epl_pts(:,1:2) + 1;
             [Model{k}.F  Model{k}.segMap  D(:,:,k)] = GetWarpNoFillHole(Key{k}.F,Key{k}.segMap,Key{k}.D,epl_pts(:,1),epl_pts(:,2));
             figure(k+1); imshow(D(:,:,k)/0.0053);
         end
