@@ -73,10 +73,14 @@ switch sequence
     case {'Angkor'}
         data_class = 'video';
         max_disp = 0.0053;
-    case {'Flower', 'Walk'}
+    case {'Flower'}
         % In these two cases, the max_disparity is unknown
         data_class = 'video';
-        max_disp = 0.1;
+        max_disp = 0.0098;
+    case {'Lawn'}
+        % In these two cases, the max_disparity is unknown
+        data_class = 'video';
+        max_disp = 0.009578;
     otherwise
         error('Sequence ''%s'' not recognised', sequence);
 end

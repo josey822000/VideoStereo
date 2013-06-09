@@ -89,27 +89,31 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         for(int i=1;i<szY-1;i++)
         {
             id = j*szY+i;
-            if(dstSeg[id]==0)
+            if(dstF[id]==0)
             {
                 tmpD = 0;
                 cnt = 0;
-                if(dstSeg[id+1]!=0)
+                if(dstF[id+1]!=0)
                 {
+                    dstSeg[id] = dstSeg[id+1];
                     tmpD += dstDis[id+1];
                     cnt++;
                 }
-                if(dstSeg[id-1]!=0)
+                if(dstF[id-1]!=0)
                 {
+                    dstSeg[id] = dstSeg[id-1];
                     tmpD += dstDis[id-1];
                     cnt++;
                 }
-                if(dstSeg[id+szY]!=0)
+                if(dstF[id+szY]!=0)
                 {
+                    dstSeg[id] = dstSeg[id+szY];
                     tmpD += dstDis[id+szY];
                     cnt++;
                 }
-                if(dstSeg[id-szY]!=0)
+                if(dstF[id-szY]!=0)
                 {
+                    dstSeg[id] = dstSeg[id-szY];
                     tmpD += dstDis[id-szY];
                     cnt++;
                 }
@@ -123,23 +127,26 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
     for(int i=1;i<szY-1;i++)
     {
         id = i;
-        if(dstSeg[id]==0)
+        if(dstF[id]==0)
         {
             
             tmpD = 0;
             cnt = 0;
-            if(dstSeg[id+1]!=0)
+            if(dstF[id+1]!=0)
             {
+                dstSeg[id] = dstSeg[id+1];
                 tmpD += dstDis[id+1];
                 cnt++;
             }
-            if(dstSeg[id-1]!=0)
+            if(dstF[id-1]!=0)
             {
+                dstSeg[id] = dstSeg[id-1];
                 tmpD += dstDis[id-1];
                 cnt++;
             }
-            if(dstSeg[id+szY]!=0)
+            if(dstF[id+szY]!=0)
             {
+                dstSeg[id] = dstSeg[id+szY];
                 tmpD += dstDis[id+szY];
                 cnt++;
             }
@@ -151,23 +158,26 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         
         //
         id = (szX-1)*szY+i;
-        if(dstSeg[id]==0)
+        if(dstF[id]==0)
         {
             tmpD = 0;
             cnt = 0;
-            if(dstSeg[id+1]!=0)
+            if(dstF[id+1]!=0)
             {
+                dstSeg[id] = dstSeg[id+1];
                 tmpD += dstDis[id+1];
                 cnt++;
             }
              
-            if(dstSeg[id-1]!=0)
+            if(dstF[id-1]!=0)
             {
+                dstSeg[id] = dstSeg[id-1];
                 tmpD += dstDis[id-1];
                 cnt++;
             }
-            if(dstSeg[id-szY]!=0)
+            if(dstF[id-szY]!=0)
             {
+                dstSeg[id] = dstSeg[id-szY];
                 tmpD += dstDis[id-szY];
                 cnt++;
             }
@@ -182,22 +192,25 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
     for(int j=1;j<szX-1;j++)
     {
         id = j*szY;
-        if(dstSeg[id]==0)
+        if(dstF[id]==0)
         {
             tmpD = 0;
             cnt = 0;
-            if(dstSeg[id+1]!=0)
+            if(dstF[id+1]!=0)
             {
+                dstSeg[id] = dstSeg[id+1];
                 tmpD += dstDis[id+1];
                 cnt++;
             }
-            if(dstSeg[id+szY]!=0)
+            if(dstF[id+szY]!=0)
             {
+                dstSeg[id] = dstSeg[id+szY];
                 tmpD += dstDis[id+szY];
                 cnt++;
             }
-            if(dstSeg[id-szY]!=0)
+            if(dstF[id-szY]!=0)
             {
+                dstSeg[id] = dstSeg[id-szY];
                 tmpD += dstDis[id-szY];
                 cnt++;
             }
@@ -209,22 +222,25 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         
         //
         id = j*szY+(szY-1);
-        if(dstSeg[id]==0)
+        if(dstF[id]==0)
         {
             tmpD = 0;
             cnt = 0;
-            if(dstSeg[id-1]!=0)
+            if(dstF[id-1]!=0)
             {
+                dstSeg[id] = dstSeg[id-1];
                 tmpD += dstDis[id-1];
                 cnt++;
             }
-            if(dstSeg[id+szY]!=0)
+            if(dstF[id+szY]!=0)
             {
+                dstSeg[id] = dstSeg[id+szY];
                 tmpD += dstDis[id+szY];
                 cnt++;
             }
-            if(dstSeg[id-szY]!=0)
+            if(dstF[id-szY]!=0)
             {
+                dstSeg[id] = dstSeg[id-szY];
                 tmpD += dstDis[id-szY];
                 cnt++;
             }
@@ -236,18 +252,20 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         
     }
     id = 0;
-    if(dstSeg[id]==0)
+    if(dstF[id]==0)
     {
         tmpD = 0;
         cnt = 0;
-        if(dstSeg[id+1]!=0)
+        if(dstF[id+1]!=0)
         {
+            dstSeg[id] = dstSeg[id+1];
             tmpD += dstDis[id+1];
             cnt++;
         }
         
-        if(dstSeg[id+szY]!=0)
+        if(dstF[id+szY]!=0)
         {
+            dstSeg[id] = dstSeg[id+szY];
             tmpD += dstDis[id+szY];
             cnt++;
         }
@@ -258,18 +276,20 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         }
     }
     id = szY-1;
-    if(dstSeg[id]==0)
+    if(dstF[id]==0)
     {
         
         tmpD = 0;
         cnt = 0;
-        if(dstSeg[id-1]!=0)
+        if(dstF[id-1]!=0)
         {
+            dstSeg[id] = dstSeg[id-1];
             tmpD += dstDis[id-1];
             cnt++;
         }
-        if(dstSeg[id+szY]!=0)
+        if(dstF[id+szY]!=0)
         {
+            dstSeg[id] = dstSeg[id+szY];
             tmpD += dstDis[id+szY];
             cnt++;
         }
@@ -280,19 +300,21 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         }
     }
     id = (szX-1)*szY;
-    if(dstSeg[id]==0)
+    if(dstF[id]==0)
     {
         
         tmpD = 0;
         cnt = 0;
-        if(dstSeg[id+1]!=0)
+        if(dstF[id+1]!=0)
         {
+            dstSeg[id] = dstSeg[id+1];
             tmpD += dstDis[id+1];
             cnt++;
         }
         
-        if(dstSeg[id-szY]!=0)
+        if(dstF[id-szY]!=0)
         {
+            dstSeg[id] = dstSeg[id-szY];
             tmpD += dstDis[id-szY];
             cnt++;
         }
@@ -302,19 +324,21 @@ template< class T>int Warp(T* F,T* segMap,double* D,T* dstF,T* dstSeg,double* ds
         }
     }
     id = szX*szY-1;
-    if(dstSeg[id]==0)
+    if(dstF[id]==0)
     {
         tmpD = 0;
         cnt = 0;
         
-        if(dstSeg[id-1]!=0)
+        if(dstF[id-1]!=0)
         {
+            dstSeg[id] = dstSeg[id-1];
             tmpD += dstDis[id-1];
             cnt++;
         }
         
-        if(dstSeg[id-szY]!=0)
+        if(dstF[id-szY]!=0)
         {
+            dstSeg[id] = dstSeg[id-szY];
             tmpD += dstDis[id-szY];
             cnt++;
         }

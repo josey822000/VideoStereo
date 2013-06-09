@@ -1,4 +1,4 @@
-function [ output_args ] = InitialByKey2( Key, vals, options)
+function [ output_args ] = InitialByKey3( Key, vals, options)
 %INITIALALL Summary of this function goes here
 %   Detailed explanation goes here
     P = vals.P;
@@ -31,7 +31,9 @@ function [ output_args ] = InitialByKey2( Key, vals, options)
         Model = cell(2,1);
         % use 2 keyframe, one warp to current view as reference, other one warp
         % to matching frame
-        for k=1:keyFrameNum
+        
+        for mk=1:2
+            k = floor(i/15)+mk;
             % hole stay -1 label and assign big cost(no information from this)
             % Kf: keyframe1, K2: current
             Kf = vals.P.K(:,:,options.KeyFrame(k));
@@ -48,20 +50,20 @@ function [ output_args ] = InitialByKey2( Key, vals, options)
             epl_pts = epl_pts ./ repmat(epl_pts(:,3),[1 3]);
             % same coordinate with c++
 %             epl_pts(:,1:2) = epl_pts(:,1:2) + 1;
-            [Model{k}.F  Model{k}.segMap  D(:,:,k)] = GetWarpInterp(Key{k}.F,Key{k}.segMap,Key{k}.D,epl_pts(:,1),epl_pts(:,2));
-            figure(2*k); imshow(Key{k}.D/vals.d_step);
-            figure(2*k+1); imshow(D(:,:,k)/vals.d_step);
+            [Model{mk}.F  Model{mk}.segMap  D(:,:,mk)] = GetWarpInterp(Key{k}.F,Key{k}.segMap,Key{k}.D,epl_pts(:,1),epl_pts(:,2));
+            figure(2*mk); imshow(Key{k}.D/vals.d_step);
+            figure(2*mk+1); imshow(D(:,:,mk)/vals.d_step);
         end
-        finalD = D(:,:,1);
-        Holemap = double(Model{1}.segMap ~= 0);
-        for k = 2:keyFrameNum
-            kD = D(:,:,k);
-            newHoleMap = (Model{k}.segMap ~= 0);
-            finalD(newHoleMap) = finalD(newHoleMap) + kD(newHoleMap);
-            Holemap = Holemap + double(newHoleMap);
-        end
-        finalD = (finalD + 1.e-10) ./ Holemap;
-        finalD(finalD == Inf) = 0;
+        D(D==Inf) = 0;
+        finalD = max(D(:,:,1),D(:,:,2));
+%         Holemap = double(Model{1}.segMap ~= 0);
+%         kD = D(:,:,2);
+%         newHoleMap = (Model{2}.segMap ~= 0);
+%         finalD(newHoleMap) = finalD(newHoleMap) + kD(newHoleMap);
+%         Holemap = Holemap + double(newHoleMap);
+%         
+%         finalD = (finalD + 1.e-10) ./ Holemap;
+%         finalD(finalD == Inf) = 0;
         figure(10); imshow(finalD/vals.d_step);
         delete([options.sequence '_' num2str(i) '.mat']);
         save([options.sequence '_' num2str(i) '.mat'],'finalD');	

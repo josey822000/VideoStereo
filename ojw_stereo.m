@@ -671,7 +671,7 @@ if isnumeric(options.proposal_method) && size(options.proposal_method, 1) == 1
         end
         % expand
         mkdir('middle');
-        InitialByKey2(Proposal,vals,options);
+        InitialByKey3(Proposal,vals,options);
         for m=15:115
             if ~exist(['middle/' sprintf('%03d/Key.mat',m)]) && ~any(options.KeyFrame == m)
                 mkdir(['middle/' sprintf('%03d/',m)]);
